@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.74.0",
+    "colyseus": "^0.17.8",
+    "colyseus.js": "^0.16.22",
+    "phaser": "^3.90.0"
+  }
+}

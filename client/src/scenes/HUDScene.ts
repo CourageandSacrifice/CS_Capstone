@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { ClassData } from '../data/Classes';
 import type { GameScene } from './GameScene';
+import { createRoom, joinAnyRoom, reconnect, hasReconnectionToken, clearReconnectionData } from '../network/Network';
 
 export class HUDScene extends Phaser.Scene {
   private classData!: ClassData;
@@ -13,6 +14,11 @@ export class HUDScene extends Phaser.Scene {
   private hpBarH = 24;
   private hpBarX = 0; // set in create
   private hpBarY = 38;
+
+  // Lobby UI elements
+  private lobbyContainer!: Phaser.GameObjects.Container;
+  private roomCodeText!: Phaser.GameObjects.Text;
+  private joinInput = '';
 
   constructor() {
     super('HUDScene');
@@ -93,7 +99,7 @@ export class HUDScene extends Phaser.Scene {
 
     // Controls legend at bottom center
     this.add
-      .text(width / 2, height - 24, 'WASD: Move  |  E: Attack  |  SPACE: Dash', {
+      .text(width / 2, height - 24, 'WASD: Move  |  O: Attack  |  SPACE: Dash', {
         fontFamily: 'Courier New, monospace',
         fontSize: '14px',
         color: '#a8dadc',
@@ -106,6 +112,169 @@ export class HUDScene extends Phaser.Scene {
     this.gameScene.events.on('playerHpChanged', (hp: number, maxHp: number) => {
       this.drawHpBar(hp / maxHp);
       this.hpText.setText(`${hp} / ${maxHp}`);
+    });
+
+    // Build lobby UI in bottom-left
+    this.buildLobbyUI(height);
+
+    // Attempt auto-reconnect if we have a stored token
+    if (hasReconnectionToken()) {
+      this.attemptReconnect();
+    }
+  }
+
+  private async attemptReconnect(): Promise<void> {
+    this.roomCodeText.setText('Reconnecting...').setColor('#ffff00');
+    // Hide buttons during reconnect attempt
+    this.lobbyContainer.each((child: Phaser.GameObjects.GameObject) => {
+      if (child !== this.roomCodeText) {
+        (child as Phaser.GameObjects.Container).setVisible(false);
+      }
+    });
+
+    try {
+      const room = await reconnect();
+      this.onConnected(room.roomId);
+      this.gameScene.onRoomConnected(room);
+    } catch (err) {
+      console.warn('Auto-reconnect failed:', err);
+      clearReconnectionData();
+      this.roomCodeText.setText('').setColor('#00ff00');
+      // Show buttons again
+      this.lobbyContainer.each((child: Phaser.GameObjects.GameObject) => {
+        (child as Phaser.GameObjects.Container).setVisible(true);
+      });
+    }
+  }
+
+  private buildLobbyUI(height: number): void {
+    const baseX = 12;
+    const baseY = height - 60;
+
+    this.lobbyContainer = this.add.container(baseX, baseY);
+
+    // Room code display (hidden until connected)
+    this.roomCodeText = this.add
+      .text(0, -24, '', {
+        fontFamily: 'Courier New, monospace',
+        fontSize: '13px',
+        color: '#00ff00',
+        stroke: '#000000',
+        strokeThickness: 3,
+      })
+      .setOrigin(0, 0.5);
+    this.lobbyContainer.add(this.roomCodeText);
+
+    // CREATE button — host a new game
+    const createBtn = this.createButton(0, 0, 'CREATE', 0xe63946, () => this.handleCreate());
+    this.lobbyContainer.add(createBtn);
+
+    // PLAY button — join an existing game
+    const playBtn = this.createButton(86, 0, 'PLAY', 0x2a9d8f, () => this.handleJoin());
+    this.lobbyContainer.add(playBtn);
+  }
+
+  private createButton(
+    x: number,
+    y: number,
+    label: string,
+    color: number,
+    onClick: () => void,
+  ): Phaser.GameObjects.Container {
+    const btnW = 78;
+    const btnH = 26;
+    const container = this.add.container(x, y);
+
+    const bg = this.add.graphics();
+    bg.fillStyle(color, 1);
+    bg.fillRoundedRect(0, 0, btnW, btnH, 4);
+    bg.lineStyle(1, 0x000000, 1);
+    bg.strokeRoundedRect(0, 0, btnW, btnH, 4);
+    container.add(bg);
+
+    const txt = this.add
+      .text(btnW / 2, btnH / 2, label, {
+        fontFamily: 'Courier New, monospace',
+        fontSize: '12px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+        stroke: '#000000',
+        strokeThickness: 2,
+      })
+      .setOrigin(0.5);
+    container.add(txt);
+
+    // Hit zone for interaction
+    const zone = this.add
+      .zone(btnW / 2, btnH / 2, btnW, btnH)
+      .setInteractive({ useHandCursor: true });
+    container.add(zone);
+
+    zone.on('pointerover', () => {
+      bg.clear();
+      bg.fillStyle(color, 0.7);
+      bg.fillRoundedRect(0, 0, btnW, btnH, 4);
+      bg.lineStyle(1, 0xffffff, 1);
+      bg.strokeRoundedRect(0, 0, btnW, btnH, 4);
+    });
+
+    zone.on('pointerout', () => {
+      bg.clear();
+      bg.fillStyle(color, 1);
+      bg.fillRoundedRect(0, 0, btnW, btnH, 4);
+      bg.lineStyle(1, 0x000000, 1);
+      bg.strokeRoundedRect(0, 0, btnW, btnH, 4);
+    });
+
+    zone.on('pointerdown', onClick);
+
+    return container;
+  }
+
+  private promptName(): string | null {
+    const name = window.prompt('Enter your name:');
+    if (!name || name.trim() === '') return null;
+    return name.trim().slice(0, 16);
+  }
+
+  private async handleCreate(): Promise<void> {
+    const name = this.promptName();
+    if (!name) return;
+
+    try {
+      this.roomCodeText.setText('Creating...').setColor('#ffff00');
+      const room = await createRoom(name);
+      this.onConnected(room.roomId);
+      this.gameScene.onRoomConnected(room);
+    } catch (err) {
+      console.error('Failed to create room:', err);
+      this.roomCodeText.setText('Create failed').setColor('#ff0000');
+    }
+  }
+
+  private async handleJoin(): Promise<void> {
+    const name = this.promptName();
+    if (!name) return;
+
+    try {
+      this.roomCodeText.setText('Finding game...').setColor('#ffff00');
+      const room = await joinAnyRoom(name);
+      this.onConnected(room.roomId);
+      this.gameScene.onRoomConnected(room);
+    } catch (err) {
+      console.error('Failed to join room:', err);
+      this.roomCodeText.setText('No games found').setColor('#ff0000');
+    }
+  }
+
+  private onConnected(roomId: string): void {
+    this.roomCodeText.setText(`Room: ${roomId}`).setColor('#00ff00');
+
+    // Hide buttons after connecting
+    this.lobbyContainer.each((child: Phaser.GameObjects.GameObject) => {
+      if (child !== this.roomCodeText) {
+        (child as Phaser.GameObjects.Container).setVisible(false);
+      }
     });
   }
 

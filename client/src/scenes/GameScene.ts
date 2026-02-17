@@ -6,17 +6,15 @@ import {
   TILE,
   MAP_W,
   MAP_H,
-  isWalkable,
 } from '../map/CampusMap';
 import { ClassData, DEFAULT_CLASS } from '../data/Classes';
 import { Player } from '../entities/Player';
-import { Dummy } from '../entities/Dummy';
-import { connect } from '../network/Network';
+import { RemotePlayer } from '../entities/RemotePlayer';
+import { sendPosition, sendAttack } from '../network/Network';
+import { Room, getStateCallbacks } from '@colyseus/sdk';
 
 export class GameScene extends Phaser.Scene {
   player!: Player;
-  dummies: Dummy[] = [];
-  private connectedText?: Phaser.GameObjects.Text;
 
   private classData!: ClassData;
   private cursors!: {
@@ -27,6 +25,13 @@ export class GameScene extends Phaser.Scene {
   };
   private spaceKey!: Phaser.Input.Keyboard.Key;
   private attackKey!: Phaser.Input.Keyboard.Key;
+
+  private room?: Room;
+  private remotePlayers: Map<string, RemotePlayer> = new Map();
+  private lastSendTime = 0;
+  private static readonly SEND_INTERVAL = 50; // ~20fps
+
+  private eliminatedText?: Phaser.GameObjects.Text;
 
   constructor() {
     super('GameScene');
@@ -48,20 +53,6 @@ export class GameScene extends Phaser.Scene {
     const spawnY = 36 * TILE_SIZE + TILE_SIZE / 2;
     this.player = new Player(this, spawnX, spawnY, this.classData);
 
-    // Dummies — only spawn on walkable tiles
-    const dummySpots = [
-      [44, 15], [91, 35], [30, 50],
-      [75, 52], [40, 58], [55, 77],
-    ];
-    this.dummies = [];
-    for (const [tx, ty] of dummySpots) {
-      if (isWalkable(tx, ty)) {
-        this.dummies.push(
-          new Dummy(this, tx * TILE_SIZE + TILE_SIZE / 2, ty * TILE_SIZE + TILE_SIZE / 2),
-        );
-      }
-    }
-
     // Camera
     this.cameras.main.setBounds(0, 0, worldW, worldH);
     this.cameras.main.startFollow(this.player.sprite, true, 0.1, 0.1);
@@ -76,7 +67,7 @@ export class GameScene extends Phaser.Scene {
       right: kb.addKey(Phaser.Input.Keyboard.KeyCodes.D),
     };
     this.spaceKey = kb.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
-    this.attackKey = kb.addKey(Phaser.Input.Keyboard.KeyCodes.E);
+    this.attackKey = kb.addKey(Phaser.Input.Keyboard.KeyCodes.O);
 
     // HUD
     this.scene.launch('HUDScene', {
@@ -85,46 +76,124 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.events.emit('playerHpChanged', this.player.hp, this.player.maxHp);
+  }
 
-    // Connect to Colyseus server
-    connect()
-      .then((room) => {
-        this.connectedText = this.add
-          .text(this.scale.width / 2, 40, 'Player connected', {
-            fontFamily: 'Courier New, monospace',
-            fontSize: '16px',
-            color: '#00ff00',
-            stroke: '#000000',
-            strokeThickness: 3,
-          })
-          .setOrigin(0.5)
-          .setScrollFactor(0)
-          .setDepth(100);
+  /** Called by HUDScene once a room is joined/created */
+  onRoomConnected(room: Room): void {
+    this.room = room;
 
-        // Fade out after 3 seconds
-        this.time.delayedCall(3000, () => {
-          this.tweens.add({
-            targets: this.connectedText,
-            alpha: 0,
-            duration: 500,
-            onComplete: () => this.connectedText?.destroy(),
-          });
+    // Wait for the first state sync before setting up listeners
+    room.onStateChange.once((state: any) => {
+      this.setupMultiplayer(room, state);
+    });
+  }
+
+  private setupMultiplayer(room: Room, state: any): void {
+    const $ = getStateCallbacks(room) as any;
+
+    // Move local player to server-assigned spawn position and show name
+    const myState = state.players.get(room.sessionId);
+    if (myState) {
+      this.player.sprite.x = myState.x;
+      this.player.sprite.y = myState.y;
+      this.player.setNameLabel(myState.name);
+    }
+
+    $(state.players).onAdd((playerState: any, sessionId: string) => {
+      if (sessionId === room.sessionId) {
+        // Local player state listeners
+        $(playerState).listen("hp", () => {
+          const prevHp = this.player.hp;
+          this.player.hp = playerState.hp;
+          this.player.maxHp = playerState.maxHp;
+          this.events.emit('playerHpChanged', playerState.hp, playerState.maxHp);
+          if (playerState.hp < prevHp) {
+            this.player.takeDamage(0); // flash only, no additional HP reduction
+          }
         });
-      })
-      .catch((err) => {
-        console.error('Failed to connect:', err);
-        this.add
-          .text(this.scale.width / 2, 40, 'Connection failed', {
-            fontFamily: 'Courier New, monospace',
-            fontSize: '16px',
-            color: '#ff0000',
-            stroke: '#000000',
-            strokeThickness: 3,
-          })
-          .setOrigin(0.5)
-          .setScrollFactor(0)
-          .setDepth(100);
+
+        $(playerState).listen("alive", () => {
+          this.player.alive = playerState.alive;
+          if (!playerState.alive) {
+            this.showEliminatedOverlay();
+          } else {
+            this.hideEliminatedOverlay();
+            this.player.sprite.x = playerState.x;
+            this.player.sprite.y = playerState.y;
+          }
+        });
+        return;
+      }
+
+      const remote = new RemotePlayer(
+        this,
+        playerState.x,
+        playerState.y,
+        playerState.name || sessionId.slice(0, 4),
+        playerState.color,
+      );
+      remote.updateHp(playerState.hp, playerState.maxHp);
+      remote.setAlive(playerState.alive);
+      this.remotePlayers.set(sessionId, remote);
+
+      $(playerState).listen("x", () => {
+        const rp = this.remotePlayers.get(sessionId);
+        if (rp) rp.updatePosition(playerState.x, playerState.y);
       });
+
+      $(playerState).listen("y", () => {
+        const rp = this.remotePlayers.get(sessionId);
+        if (rp) rp.updatePosition(playerState.x, playerState.y);
+      });
+
+      $(playerState).listen("hp", () => {
+        const rp = this.remotePlayers.get(sessionId);
+        if (rp) {
+          const prevHp = rp.hp;
+          rp.updateHp(playerState.hp, playerState.maxHp);
+          if (playerState.hp < prevHp) {
+            rp.takeDamageFlash();
+          }
+        }
+      });
+
+      $(playerState).listen("alive", () => {
+        const rp = this.remotePlayers.get(sessionId);
+        if (rp) rp.setAlive(playerState.alive);
+      });
+    }, true);
+
+    $(state.players).onRemove((_playerState: any, sessionId: string) => {
+      const remote = this.remotePlayers.get(sessionId);
+      if (remote) {
+        remote.destroy();
+        this.remotePlayers.delete(sessionId);
+      }
+    });
+  }
+
+  private showEliminatedOverlay(): void {
+    if (this.eliminatedText) return;
+    this.eliminatedText = this.add.text(
+      this.cameras.main.centerX,
+      this.cameras.main.centerY,
+      'ELIMINATED',
+      {
+        fontFamily: 'Courier New, monospace',
+        fontSize: '48px',
+        color: '#ff0000',
+        stroke: '#000000',
+        strokeThickness: 6,
+        fontStyle: 'bold',
+      },
+    ).setOrigin(0.5).setScrollFactor(0).setDepth(100);
+  }
+
+  private hideEliminatedOverlay(): void {
+    if (this.eliminatedText) {
+      this.eliminatedText.destroy();
+      this.eliminatedText = undefined;
+    }
   }
 
   private drawMap(): void {
@@ -188,13 +257,21 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(time: number, delta: number): void {
+    if (!this.player.alive) return;
+
     this.player.update(time, delta, this.cursors);
 
     if (Phaser.Input.Keyboard.JustDown(this.spaceKey)) {
       this.player.dash(time);
     }
     if (Phaser.Input.Keyboard.JustDown(this.attackKey)) {
-      this.player.tryAttack(time, this.dummies);
+      this.player.tryAttack(time, this.remotePlayers, sendAttack);
+    }
+
+    // Send position to server throttled to ~20fps
+    if (this.room && time - this.lastSendTime > GameScene.SEND_INTERVAL) {
+      sendPosition(this.player.x, this.player.y);
+      this.lastSendTime = time;
     }
   }
 }

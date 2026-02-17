@@ -1,7 +1,6 @@
 import Phaser from 'phaser';
 import { TILE_SIZE, isWalkable } from '../map/CampusMap';
 import { ClassData } from '../data/Classes';
-import type { Dummy } from './Dummy';
 
 interface CursorKeys {
   up: Phaser.Input.Keyboard.Key;
@@ -24,7 +23,9 @@ export class Player {
 
   private body: Phaser.GameObjects.Graphics;
   private eyes: Phaser.GameObjects.Graphics;
+  private nameLabel?: Phaser.GameObjects.Text;
   private lastAttackTime = 0;
+  alive = true;
   isDashing = false;
   private dashStartTime = 0;
   dashCooldown = 0;
@@ -55,6 +56,18 @@ export class Player {
     this.sprite.add(this.eyes);
 
     this.sprite.setDepth(10);
+  }
+
+  setNameLabel(name: string): void {
+    if (this.nameLabel) this.nameLabel.destroy();
+    this.nameLabel = this.scene.add.text(0, -14, name, {
+      fontFamily: 'Courier New, monospace',
+      fontSize: '9px',
+      color: '#ffffff',
+      stroke: '#000000',
+      strokeThickness: 2,
+    }).setOrigin(0.5);
+    this.sprite.add(this.nameLabel);
   }
 
   private drawBodyColor(color: number): void {
@@ -161,23 +174,27 @@ export class Player {
     });
   }
 
-  tryAttack(time: number, dummies: Dummy[]): void {
+  tryAttack(
+    time: number,
+    remotePlayers: Map<string, { sprite: Phaser.GameObjects.Container; alive: boolean }>,
+    sendAttackFn: (id: string) => void,
+  ): void {
     if (time - this.lastAttackTime < this.attackRate) return;
 
     let hit = false;
-    for (const dummy of dummies) {
-      if (!dummy.alive) continue;
+    remotePlayers.forEach((rp, id) => {
+      if (!rp.alive) return;
       const dist = Phaser.Math.Distance.Between(
         this.sprite.x,
         this.sprite.y,
-        dummy.sprite.x,
-        dummy.sprite.y,
+        rp.sprite.x,
+        rp.sprite.y,
       );
       if (dist <= this.attackRange) {
-        dummy.takeDamage(this.attackDamage);
+        sendAttackFn(id);
         hit = true;
       }
-    }
+    });
 
     if (hit) {
       this.lastAttackTime = time;
