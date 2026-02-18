@@ -9,16 +9,19 @@ export class HUDScene extends Phaser.Scene {
   private hpBarFill!: Phaser.GameObjects.Graphics;
   private hpText!: Phaser.GameObjects.Text;
   private dashText!: Phaser.GameObjects.Text;
+  private killText!: Phaser.GameObjects.Text;
 
-  private hpBarW = 300;
-  private hpBarH = 24;
+  private hpBarW = 420;
+  private hpBarH = 34;
   private hpBarX = 0; // set in create
-  private hpBarY = 38;
+  private hpBarY = 46;
 
   // Lobby UI elements
   private lobbyContainer!: Phaser.GameObjects.Container;
   private roomCodeText!: Phaser.GameObjects.Text;
   private joinInput = '';
+  private isHost = false;
+  private endGameBtn?: Phaser.GameObjects.Container;
 
   constructor() {
     super('HUDScene');
@@ -37,13 +40,13 @@ export class HUDScene extends Phaser.Scene {
 
     // Title
     this.add
-      .text(width / 2, 14, 'CAMPUS CLASH', {
+      .text(width / 2, 16, 'CAMPUS CLASH', {
         fontFamily: 'Courier New, monospace',
-        fontSize: '24px',
+        fontSize: '32px',
         color: '#e63946',
         fontStyle: 'bold',
         stroke: '#000000',
-        strokeThickness: 4,
+        strokeThickness: 6,
       })
       .setOrigin(0.5);
 
@@ -66,52 +69,80 @@ export class HUDScene extends Phaser.Scene {
         `${this.classData.maxHp} / ${this.classData.maxHp}`,
         {
           fontFamily: 'Courier New, monospace',
-          fontSize: '14px',
+          fontSize: '18px',
           color: '#ffffff',
           fontStyle: 'bold',
           stroke: '#000000',
-          strokeThickness: 3,
+          strokeThickness: 4,
         },
       )
       .setOrigin(0.5);
 
     // Class name + weapon centered below HP bar
     this.add
-      .text(width / 2, this.hpBarY + this.hpBarH + 8, `${this.classData.name} - ${this.classData.weaponName}`, {
+      .text(width / 2, this.hpBarY + this.hpBarH + 12, `${this.classData.name} - ${this.classData.weaponName}`, {
         fontFamily: 'Courier New, monospace',
-        fontSize: '14px',
+        fontSize: '18px',
         color: '#f1faee',
-        stroke: '#000000',
-        strokeThickness: 2,
-      })
-      .setOrigin(0.5);
-
-    // Dash cooldown centered below class name
-    this.dashText = this.add
-      .text(width / 2, this.hpBarY + this.hpBarH + 28, 'DASH: READY', {
-        fontFamily: 'Courier New, monospace',
-        fontSize: '13px',
-        color: '#2a9d8f',
-        stroke: '#000000',
-        strokeThickness: 2,
-      })
-      .setOrigin(0.5);
-
-    // Controls legend at bottom center
-    this.add
-      .text(width / 2, height - 24, 'WASD: Move  |  O: Attack  |  SPACE: Dash', {
-        fontFamily: 'Courier New, monospace',
-        fontSize: '14px',
-        color: '#a8dadc',
         stroke: '#000000',
         strokeThickness: 3,
       })
       .setOrigin(0.5);
 
+    // Dash cooldown centered below class name
+    this.dashText = this.add
+      .text(width / 2, this.hpBarY + this.hpBarH + 38, 'DASH: READY', {
+        fontFamily: 'Courier New, monospace',
+        fontSize: '17px',
+        color: '#2a9d8f',
+        stroke: '#000000',
+        strokeThickness: 3,
+      })
+      .setOrigin(0.5);
+
+    // Controls legend at bottom center
+    this.add
+      .text(width / 2, height - 28, 'WASD: Move  |  O: Attack  |  SPACE: Dash', {
+        fontFamily: 'Courier New, monospace',
+        fontSize: '18px',
+        color: '#a8dadc',
+        stroke: '#000000',
+        strokeThickness: 4,
+      })
+      .setOrigin(0.5);
+
+    // Kill counter top-left
+    this.add.text(16, 16, 'KILLS', {
+      fontFamily: 'Courier New, monospace',
+      fontSize: '16px',
+      color: '#a8dadc',
+      stroke: '#000000',
+      strokeThickness: 3,
+    });
+
+    this.killText = this.add.text(16, 38, '0', {
+      fontFamily: 'Courier New, monospace',
+      fontSize: '48px',
+      color: '#ffffff',
+      fontStyle: 'bold',
+      stroke: '#000000',
+      strokeThickness: 6,
+    });
+
     // Listen for HP changes
     this.gameScene.events.on('playerHpChanged', (hp: number, maxHp: number) => {
       this.drawHpBar(hp / maxHp);
       this.hpText.setText(`${hp} / ${maxHp}`);
+    });
+
+    // Listen for kill changes
+    this.gameScene.events.on('playerKillsChanged', (kills: number) => {
+      this.killText.setText(`${kills}`);
+    });
+
+    // Listen for game over
+    this.gameScene.events.on('gameOver', (scores: { name: string; kills: number }[]) => {
+      this.showGameOverScreen(scores);
     });
 
     // Build lobby UI in bottom-left
@@ -149,15 +180,15 @@ export class HUDScene extends Phaser.Scene {
 
   private buildLobbyUI(height: number): void {
     const baseX = 12;
-    const baseY = height - 60;
+    const baseY = height - 72;
 
     this.lobbyContainer = this.add.container(baseX, baseY);
 
     // Room code display (hidden until connected)
     this.roomCodeText = this.add
-      .text(0, -24, '', {
+      .text(0, -30, '', {
         fontFamily: 'Courier New, monospace',
-        fontSize: '13px',
+        fontSize: '17px',
         color: '#00ff00',
         stroke: '#000000',
         strokeThickness: 3,
@@ -170,7 +201,7 @@ export class HUDScene extends Phaser.Scene {
     this.lobbyContainer.add(createBtn);
 
     // PLAY button — join an existing game
-    const playBtn = this.createButton(86, 0, 'PLAY', 0x2a9d8f, () => this.handleJoin());
+    const playBtn = this.createButton(110, 0, 'PLAY', 0x2a9d8f, () => this.handleJoin());
     this.lobbyContainer.add(playBtn);
   }
 
@@ -181,8 +212,8 @@ export class HUDScene extends Phaser.Scene {
     color: number,
     onClick: () => void,
   ): Phaser.GameObjects.Container {
-    const btnW = 78;
-    const btnH = 26;
+    const btnW = 100;
+    const btnH = 36;
     const container = this.add.container(x, y);
 
     const bg = this.add.graphics();
@@ -195,11 +226,11 @@ export class HUDScene extends Phaser.Scene {
     const txt = this.add
       .text(btnW / 2, btnH / 2, label, {
         fontFamily: 'Courier New, monospace',
-        fontSize: '12px',
+        fontSize: '16px',
         color: '#ffffff',
         fontStyle: 'bold',
         stroke: '#000000',
-        strokeThickness: 2,
+        strokeThickness: 3,
       })
       .setOrigin(0.5);
     container.add(txt);
@@ -244,6 +275,7 @@ export class HUDScene extends Phaser.Scene {
     try {
       this.roomCodeText.setText('Creating...').setColor('#ffff00');
       const room = await createRoom(name);
+      this.isHost = true;
       this.onConnected(room.roomId);
       this.gameScene.onRoomConnected(room);
     } catch (err) {
@@ -270,11 +302,87 @@ export class HUDScene extends Phaser.Scene {
   private onConnected(roomId: string): void {
     this.roomCodeText.setText(`Room: ${roomId}`).setColor('#00ff00');
 
-    // Hide buttons after connecting
+    // Hide lobby buttons after connecting
     this.lobbyContainer.each((child: Phaser.GameObjects.GameObject) => {
       if (child !== this.roomCodeText) {
         (child as Phaser.GameObjects.Container).setVisible(false);
       }
+    });
+
+    // Show END GAME button for host only
+    if (this.isHost) {
+      const { width } = this.scale;
+      this.endGameBtn = this.createButton(width - 116, 16, 'END GAME', 0x880000, () => {
+        this.gameScene.sendEndGame();
+        if (this.endGameBtn) this.endGameBtn.setVisible(false);
+      });
+      this.add.existing(this.endGameBtn);
+    }
+  }
+
+  private showGameOverScreen(scores: { name: string; kills: number }[]): void {
+    const { width, height } = this.scale;
+    const cx = width / 2;
+    const cy = height / 2;
+
+    // Dark overlay
+    const overlay = this.add.graphics();
+    overlay.fillStyle(0x000000, 0.75);
+    overlay.fillRect(0, 0, width, height);
+    overlay.setDepth(200);
+
+    // GAME OVER title
+    this.add.text(cx, cy - 120, 'GAME OVER', {
+      fontFamily: 'Courier New, monospace',
+      fontSize: '52px',
+      color: '#e63946',
+      fontStyle: 'bold',
+      stroke: '#000000',
+      strokeThickness: 8,
+    }).setOrigin(0.5).setDepth(201);
+
+    // Leaderboard header
+    this.add.text(cx, cy - 52, '— FINAL SCORES —', {
+      fontFamily: 'Courier New, monospace',
+      fontSize: '18px',
+      color: '#a8dadc',
+      stroke: '#000000',
+      strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(201);
+
+    // Score rows
+    scores.forEach((entry, i) => {
+      const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
+      this.add.text(cx, cy - 14 + i * 36, `${medal}  ${entry.name}  —  ${entry.kills} kills`, {
+        fontFamily: 'Courier New, monospace',
+        fontSize: '20px',
+        color: i === 0 ? '#f4d03f' : '#ffffff',
+        fontStyle: i === 0 ? 'bold' : 'normal',
+        stroke: '#000000',
+        strokeThickness: 3,
+      }).setOrigin(0.5).setDepth(201);
+    });
+
+    // Return to menu countdown
+    let countdown = 5;
+    const countText = this.add.text(cx, cy + 160, `Returning to menu in ${countdown}s...`, {
+      fontFamily: 'Courier New, monospace',
+      fontSize: '16px',
+      color: '#aaaaaa',
+      stroke: '#000000',
+      strokeThickness: 2,
+    }).setOrigin(0.5).setDepth(201);
+
+    this.time.addEvent({
+      delay: 1000,
+      repeat: 4,
+      callback: () => {
+        countdown--;
+        countText.setText(`Returning to menu in ${countdown}s...`);
+        if (countdown <= 0) {
+          window.location.reload();
+        }
+      },
     });
   }
 
@@ -294,12 +402,14 @@ export class HUDScene extends Phaser.Scene {
 
   update(): void {
     if (!this.gameScene.player) return;
-    const cd = this.gameScene.player.dashCooldown;
-    if (cd > 0) {
-      this.dashText.setText(`DASH: ${(cd / 1000).toFixed(1)}s`);
-      this.dashText.setColor('#cc0000');
+    const { dashCharges, dashRechargeCooldown } = this.gameScene.player;
+    const pips = '●'.repeat(dashCharges) + '○'.repeat(3 - dashCharges);
+
+    if (dashCharges < 3 && dashRechargeCooldown > 0) {
+      this.dashText.setText(`DASH: ${pips}  ${(dashRechargeCooldown / 1000).toFixed(1)}s`);
+      this.dashText.setColor(dashCharges === 0 ? '#cc0000' : '#ccaa00');
     } else {
-      this.dashText.setText('DASH: READY');
+      this.dashText.setText(`DASH: ${pips}`);
       this.dashText.setColor('#2a9d8f');
     }
   }

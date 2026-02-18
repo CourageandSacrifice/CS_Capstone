@@ -10,7 +10,7 @@ import {
 import { ClassData, DEFAULT_CLASS } from '../data/Classes';
 import { Player } from '../entities/Player';
 import { RemotePlayer } from '../entities/RemotePlayer';
-import { sendPosition, sendAttack } from '../network/Network';
+import { sendPosition, sendAttack, sendEndGame } from '../network/Network';
 import { Room, getStateCallbacks } from '@colyseus/sdk';
 
 export class GameScene extends Phaser.Scene {
@@ -32,6 +32,7 @@ export class GameScene extends Phaser.Scene {
   private static readonly SEND_INTERVAL = 50; // ~20fps
 
   private eliminatedText?: Phaser.GameObjects.Text;
+  private eliminatedOverlay?: Phaser.GameObjects.Graphics;
 
   constructor() {
     super('GameScene');
@@ -112,6 +113,10 @@ export class GameScene extends Phaser.Scene {
           }
         });
 
+        $(playerState).listen("kills", () => {
+          this.events.emit('playerKillsChanged', playerState.kills);
+        });
+
         $(playerState).listen("alive", () => {
           this.player.alive = playerState.alive;
           if (!playerState.alive) {
@@ -170,10 +175,31 @@ export class GameScene extends Phaser.Scene {
         this.remotePlayers.delete(sessionId);
       }
     });
+
+    $(state).listen('gameOver', () => {
+      if (!state.gameOver) return;
+      const scores: { name: string; kills: number }[] = [];
+      state.players.forEach((p: any) => {
+        scores.push({ name: p.name, kills: p.kills });
+      });
+      scores.sort((a, b) => b.kills - a.kills);
+      this.events.emit('gameOver', scores);
+    });
+  }
+
+  sendEndGame(): void {
+    sendEndGame();
   }
 
   private showEliminatedOverlay(): void {
     if (this.eliminatedText) return;
+    const { width, height } = this.cameras.main;
+
+    this.eliminatedOverlay = this.add.graphics();
+    this.eliminatedOverlay.fillStyle(0x000000, 0.55);
+    this.eliminatedOverlay.fillRect(0, 0, width, height);
+    this.eliminatedOverlay.setScrollFactor(0).setDepth(99);
+
     this.eliminatedText = this.add.text(
       this.cameras.main.centerX,
       this.cameras.main.centerY,
@@ -193,6 +219,10 @@ export class GameScene extends Phaser.Scene {
     if (this.eliminatedText) {
       this.eliminatedText.destroy();
       this.eliminatedText = undefined;
+    }
+    if (this.eliminatedOverlay) {
+      this.eliminatedOverlay.destroy();
+      this.eliminatedOverlay = undefined;
     }
   }
 

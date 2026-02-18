@@ -93,3 +93,8 @@ export function sendAttack(targetId: string): void {
   if (!room) return;
   room.send('attack', { targetId });
 }
+
+export function sendEndGame(): void {
+  if (!room) return;
+  room.send('endGame');
+}

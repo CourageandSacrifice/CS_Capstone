@@ -28,7 +28,10 @@ export class Player {
   alive = true;
   isDashing = false;
   private dashStartTime = 0;
-  dashCooldown = 0;
+  dashCharges = 3;
+  private readonly MAX_DASH_CHARGES = 3;
+  private dashChargeCooldown = 0;   // small delay between individual dashes
+  dashRechargeCooldown = 0;         // long cooldown when all charges depleted
   private facingX = 0;
   private facingY = 1;
 
@@ -118,8 +121,18 @@ export class Player {
       this.isDashing = false;
     }
 
-    if (this.dashCooldown > 0) {
-      this.dashCooldown -= delta;
+    if (this.dashChargeCooldown > 0) {
+      this.dashChargeCooldown -= delta;
+    }
+    if (this.dashCharges < this.MAX_DASH_CHARGES && this.dashRechargeCooldown > 0) {
+      this.dashRechargeCooldown -= delta;
+      if (this.dashRechargeCooldown <= 0) {
+        this.dashCharges++;
+        // If still missing charges, keep recharging at the normal rate
+        if (this.dashCharges < this.MAX_DASH_CHARGES) {
+          this.dashRechargeCooldown = 3000;
+        }
+      }
     }
 
     const speedMult = this.isDashing ? 3 : 1;
@@ -162,10 +175,17 @@ export class Player {
   }
 
   dash(time: number): void {
-    if (this.dashCooldown > 0 || this.isDashing) return;
+    if (this.dashCharges <= 0 || this.dashChargeCooldown > 0 || this.isDashing) return;
     this.isDashing = true;
     this.dashStartTime = time;
-    this.dashCooldown = 3000;
+    this.dashCharges--;
+    this.dashChargeCooldown = 400;
+
+    // Start recharge timer if not already running
+    if (this.dashRechargeCooldown <= 0) {
+      // Longer penalty if this was the last charge
+      this.dashRechargeCooldown = this.dashCharges === 0 ? 7000 : 3000;
+    }
 
     // Flash white
     this.drawBodyColor(0xffffff);

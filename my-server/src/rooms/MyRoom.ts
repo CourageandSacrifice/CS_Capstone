@@ -27,6 +27,7 @@ export class MyRoom extends Room {
   state = new MyRoomState();
   private playerIndex = 0;
   private lastAttackTime = new Map<string, number>();
+  private hostId = '';
 
   messages = {
     move: (client: Client, message: { x: number; y: number }) => {
@@ -67,6 +68,8 @@ export class MyRoom extends Room {
       if (target.hp <= 0) {
         target.hp = 0;
         target.alive = false;
+        attacker.kills += 1;
+        attacker.hp = attacker.maxHp;
 
         this.clock.setTimeout(() => {
           const spawn = SPAWN_POINTS[Math.floor(Math.random() * SPAWN_POINTS.length)];
@@ -76,7 +79,16 @@ export class MyRoom extends Room {
           target.alive = true;
         }, RESPAWN_DELAY);
       }
-    }
+    },
+
+    endGame: (client: Client) => {
+      if (client.sessionId !== this.hostId) return;
+      this.state.gameOver = true;
+      // Disconnect all clients after a short delay so clients can show the screen
+      this.clock.setTimeout(() => {
+        this.disconnect();
+      }, 5000);
+    },
   }
 
   onCreate (options: any) {
@@ -84,6 +96,7 @@ export class MyRoom extends Room {
   }
 
   onJoin (client: Client, options: any) {
+    if (!this.hostId) this.hostId = client.sessionId;
     const spawn = SPAWN_POINTS[this.playerIndex % SPAWN_POINTS.length];
     const color = PLAYER_COLORS[this.playerIndex % PLAYER_COLORS.length];
     this.playerIndex++;

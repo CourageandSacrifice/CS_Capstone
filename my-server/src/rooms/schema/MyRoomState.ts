@@ -8,8 +8,10 @@ export class PlayerState extends Schema {
   @type("number") hp: number = 100;
   @type("number") maxHp: number = 100;
   @type("boolean") alive: boolean = true;
+  @type("number") kills: number = 0;
 }
 
 export class MyRoomState extends Schema {
   @type({ map: PlayerState }) players = new MapSchema<PlayerState>();
+  @type("boolean") gameOver: boolean = false;
 }
