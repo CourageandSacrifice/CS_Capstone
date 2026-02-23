@@ -1,21 +1,26 @@
 import Phaser from 'phaser';
 import { GameScene } from './scenes/GameScene';
 import { HUDScene } from './scenes/HUDScene';
+import { initLobby } from './lobby';
 import './style.css';
 
-const config: Phaser.Types.Core.GameConfig = {
-  type: Phaser.AUTO,
-  title: 'Campus Clash',
-  parent: 'game-container',
-  width: 1280,
-  height: 720,
-  backgroundColor: '#1a1a2e',
-  pixelArt: true,
-  scene: [GameScene, HUDScene],
-  scale: {
-    mode: Phaser.Scale.FIT,
-    autoCenter: Phaser.Scale.CENTER_BOTH,
-  },
-};
+initLobby().then(({ username, mode }) => {
+  const config: Phaser.Types.Core.GameConfig = {
+    type: Phaser.AUTO,
+    title: 'Campus Clash',
+    parent: 'game-container',
+    width: 1280,
+    height: 720,
+    backgroundColor: '#1a1a2e',
+    pixelArt: true,
+    scene: [GameScene, HUDScene],
+    scale: {
+      mode: Phaser.Scale.FIT,
+      autoCenter: Phaser.Scale.CENTER_BOTH,
+    },
+  };
 
-new Phaser.Game(config);
+  const game = new Phaser.Game(config);
+  game.registry.set('username', username);
+  game.registry.set('mode', mode);
+});

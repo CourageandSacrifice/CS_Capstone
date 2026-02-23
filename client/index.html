@@ -6,7 +6,82 @@
   <title>Campus Clash</title>
 </head>
 <body>
+
+  <!-- ── LOGIN SCREEN ── -->
+  <div id="login-screen" class="hidden">
+    <div class="login-card">
+      <div class="login-logo">CAMPUS CLASH</div>
+      <p class="login-sub">Enter your name to continue</p>
+      <input id="username-input" type="text" maxlength="16"
+             placeholder="Username" autocomplete="off" spellcheck="false" />
+      <button id="login-btn">ENTER</button>
+    </div>
+  </div>
+
+  <!-- ── LOBBY SCREEN ── -->
+  <div id="lobby-screen" class="hidden">
+
+    <header class="lobby-header">
+      <div class="lobby-logo">CAMPUS CLASH</div>
+      <nav class="lobby-nav">
+        <button class="nav-tab active">LOBBY</button>
+        <button class="nav-tab nav-disabled">
+          LOCKER <span class="soon-tag">COMING SOON</span>
+        </button>
+        <button class="nav-tab nav-disabled">
+          LEADERBOARD <span class="soon-tag">COMING SOON</span>
+        </button>
+      </nav>
+    </header>
+
+    <div class="lobby-body">
+
+      <aside class="lobby-sidebar">
+        <div class="player-card">
+          <div class="player-avatar" id="lobby-avatar">CC</div>
+          <div class="player-name" id="lobby-username">Player</div>
+        </div>
+        <div class="sidebar-section">
+          <div class="sidebar-label">STATUS</div>
+          <div class="sidebar-value online">● ONLINE</div>
+        </div>
+      </aside>
+
+      <main class="lobby-stage">
+        <div class="character-showcase">
+          <div class="character-placeholder">
+            <div class="char-silhouette">
+              <svg viewBox="0 0 80 160" xmlns="http://www.w3.org/2000/svg" fill="rgba(100,160,255,0.15)" stroke="rgba(100,160,255,0.4)" stroke-width="1.5">
+                <circle cx="40" cy="22" r="16"/>
+                <rect x="22" y="42" width="36" height="52" rx="6"/>
+                <rect x="10" y="44" width="14" height="42" rx="5"/>
+                <rect x="56" y="44" width="14" height="42" rx="5"/>
+                <rect x="22" y="96" width="15" height="50" rx="5"/>
+                <rect x="43" y="96" width="15" height="50" rx="5"/>
+              </svg>
+            </div>
+            <div class="char-label">SELECT CHARACTER</div>
+            <div class="char-sub">LOCKER COMING SOON</div>
+          </div>
+          <div class="stage-disc"></div>
+        </div>
+      </main>
+
+    </div>
+
+    <footer class="lobby-footer">
+      <div class="mode-selector">
+        <button class="mode-btn active" id="host-btn">HOST</button>
+        <button class="mode-btn" id="join-btn">JOIN</button>
+      </div>
+      <button class="play-btn" id="play-btn">▶&nbsp; PLAY</button>
+    </footer>
+
+  </div>
+
+  <!-- ── GAME (hidden until PLAY) ── -->
   <div id="game-container"></div>
+
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>
