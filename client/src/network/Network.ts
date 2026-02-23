@@ -1,6 +1,6 @@
 import { Client, Room } from '@colyseus/sdk';
 
-const SERVER_URL = `ws://${window.location.hostname}:2567`;
+const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? `ws://${window.location.hostname}:2567`;
 const TOKEN_KEY = 'cc_reconnectionToken';
 
 let client: Client;
