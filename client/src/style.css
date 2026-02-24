@@ -30,12 +30,17 @@ html, body {
 #login-screen {
   position: fixed; inset: 0;
   display: flex; align-items: center; justify-content: center;
-  background-color: #080e20;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='104' viewBox='0 0 60 104'%3E%3Cpath d='M30 2L58 18v34L30 68 2 52V18zm0 36L58 54v34L30 104 2 88V54z' fill='none' stroke='%23111d3a' stroke-width='1'/%3E%3C/svg%3E");
+  background: url('/lobby-bg.jpg') center center / cover no-repeat;
   z-index: 100;
+}
+#login-screen::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: rgba(0, 0, 0, 0.55);
 }
 
 .login-card {
+  position: relative; z-index: 1;
   background: rgba(13, 27, 62, 0.95);
   border: 1px solid rgba(100, 160, 255, 0.2);
   border-radius: 12px;
@@ -94,17 +99,25 @@ html, body {
 #lobby-screen {
   position: fixed; inset: 0;
   display: flex; flex-direction: column;
-  background-color: #080e20;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='104' viewBox='0 0 60 104'%3E%3Cpath d='M30 2L58 18v34L30 68 2 52V18zm0 36L58 54v34L30 104 2 88V54z' fill='none' stroke='%23111d3a' stroke-width='1'/%3E%3C/svg%3E");
+  background: url('/lobby-bg.jpg') center center / cover no-repeat;
   z-index: 100;
 }
+#lobby-screen::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  z-index: 0;
+}
+#lobby-screen > * { position: relative; z-index: 1; }
 
 /* ── Header ── */
 .lobby-header {
   display: flex; align-items: center;
   padding: 0 28px;
   height: 56px;
-  background: rgba(5, 10, 28, 0.9);
+  background: rgba(5, 10, 28, 0.75);
+  backdrop-filter: blur(8px);
   border-bottom: 1px solid rgba(100,160,255,0.12);
   flex-shrink: 0;
 }
@@ -151,7 +164,8 @@ html, body {
 /* ── Sidebar ── */
 .lobby-sidebar {
   width: 220px; flex-shrink: 0;
-  background: rgba(5, 10, 28, 0.7);
+  background: rgba(5, 10, 28, 0.65);
+  backdrop-filter: blur(10px);
   border-right: 1px solid rgba(100,160,255,0.1);
   padding: 28px 20px;
   display: flex; flex-direction: column; gap: 28px;
@@ -231,7 +245,8 @@ html, body {
   display: flex; align-items: center; justify-content: flex-end;
   gap: 16px;
   padding: 16px 32px;
-  background: rgba(5,10,28,0.9);
+  background: rgba(5,10,28,0.75);
+  backdrop-filter: blur(8px);
   border-top: 1px solid rgba(100,160,255,0.1);
   flex-shrink: 0;
 }
