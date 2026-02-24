@@ -98,3 +98,9 @@ export function sendEndGame(): void {
   if (!room) return;
   room.send('endGame');
 }
+
+export async function leaveRoom(): Promise<void> {
+  if (!room) return;
+  clearReconnectionData();
+  await room.leave(true);
+}

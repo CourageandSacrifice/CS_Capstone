@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { ClassData } from '../data/Classes';
 import type { GameScene } from './GameScene';
-import { createRoom, joinAnyRoom, reconnect, hasReconnectionToken, clearReconnectionData } from '../network/Network';
+import { createRoom, joinAnyRoom, reconnect, hasReconnectionToken, clearReconnectionData, leaveRoom } from '../network/Network';
 
 export class HUDScene extends Phaser.Scene {
   private classData!: ClassData;
@@ -122,6 +122,12 @@ export class HUDScene extends Phaser.Scene {
       color: '#00ff00',
       stroke: '#000000',
       strokeThickness: 3,
+    });
+
+    // Return to lobby button (bottom right)
+    this.createButton(width - 172, height - 60, '← LOBBY', 0x1a3a7a, async () => {
+      await leaveRoom();
+      window.location.reload();
     });
 
     // Event listeners
