@@ -242,7 +242,7 @@ html, body {
 
 /* ── Footer ── */
 .lobby-footer {
-  display: flex; align-items: center; justify-content: flex-end;
+  display: flex; align-items: center;
   gap: 16px;
   padding: 16px 32px;
   background: rgba(5,10,28,0.75);
@@ -294,3 +294,39 @@ html, body {
   0%,100% { box-shadow: 0 0 24px rgba(245,197,24,0.4); }
   50%      { box-shadow: 0 0 40px rgba(245,197,24,0.7); }
 }
+
+/* ── Sub-options (HOST/JOIN secondary choices) ── */
+.sub-options {
+  flex: 1;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+
+.sub-btn {
+  padding: 8px 18px;
+  background: transparent;
+  border: 1px solid rgba(100,160,255,0.2); border-radius: 4px;
+  color: #5a8abf; font-family: inherit; font-size: 12px;
+  font-weight: bold; letter-spacing: 1.5px; cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.sub-btn.active {
+  background: rgba(26,58,122,0.8);
+  color: #fff;
+  border-color: rgba(100,160,255,0.5);
+}
+.sub-btn:not(.active):hover { background: rgba(100,160,255,0.08); color: #a0c0e0; }
+
+#room-code-input {
+  padding: 8px 14px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(100,160,255,0.3); border-radius: 4px;
+  color: #fff; font-family: inherit; font-size: 13px; letter-spacing: 3px;
+  outline: none; text-align: center; text-transform: uppercase;
+  width: 150px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+#room-code-input:focus {
+  border-color: rgba(100,160,255,0.8);
+  box-shadow: 0 0 10px rgba(100,160,255,0.2);
+}
+#room-code-input::placeholder { color: rgba(255,255,255,0.2); letter-spacing: 1px; }

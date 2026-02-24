@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { ClassData } from '../data/Classes';
 import type { GameScene } from './GameScene';
-import { createRoom, joinAnyRoom, reconnect, hasReconnectionToken, clearReconnectionData, leaveRoom } from '../network/Network';
+import { createRoom, joinAnyRoom, joinRoom, reconnect, hasReconnectionToken, clearReconnectionData, leaveRoom } from '../network/Network';
 
 export class HUDScene extends Phaser.Scene {
   private classData!: ClassData;
@@ -168,11 +168,18 @@ export class HUDScene extends Phaser.Scene {
 
   private async handleConnect(mode: 'host' | 'join'): Promise<void> {
     const username = this.registry.get('username') as string ?? 'Player';
+    const isPrivate = this.registry.get('isPrivate') as boolean ?? false;
+    const roomCode = this.registry.get('roomCode') as string ?? '';
     try {
       this.roomCodeText.setText('Connecting...').setColor('#ffff00');
-      const room = mode === 'host'
-        ? await createRoom(username)
-        : await joinAnyRoom(username);
+      let room;
+      if (mode === 'host') {
+        room = await createRoom(username, isPrivate);
+      } else if (roomCode) {
+        room = await joinRoom(roomCode, username);
+      } else {
+        room = await joinAnyRoom(username);
+      }
       this.isHost = mode === 'host';
       this.onConnected(room.roomId);
       this.gameScene.onRoomConnected(room);
@@ -183,10 +190,22 @@ export class HUDScene extends Phaser.Scene {
   }
 
   private onConnected(roomId: string): void {
-    this.roomCodeText.setText(`Room: ${roomId}`).setColor('#00ff00');
+    const { width, height } = this.scale;
+    this.roomCodeText.setText(`ROOM: ${roomId}`).setColor('#00ff00');
 
     if (this.isHost) {
-      const { width } = this.scale;
+      // Copy code button next to room code
+      const copyBtn = this.createButton(140, height - 28, 'COPY CODE', 0x1a4a2a, () => {
+        navigator.clipboard.writeText(roomId).then(() => {
+          this.roomCodeText.setText('COPIED!').setColor('#f5c518');
+          this.time.delayedCall(1500, () => {
+            this.roomCodeText.setText(`ROOM: ${roomId}`).setColor('#00ff00');
+          });
+        }).catch(() => {});
+      });
+      this.add.existing(copyBtn);
+
+      // End game button (top right)
       this.endGameBtn = this.createButton(width - 116, 16, 'END GAME', 0x880000, () => {
         this.gameScene.sendEndGame();
         if (this.endGameBtn) this.endGameBtn.setVisible(false);

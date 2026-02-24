@@ -40,9 +40,9 @@ export async function autoJoin(name: string): Promise<Room> {
   return setupRoom(r);
 }
 
-export async function createRoom(name: string): Promise<Room> {
+export async function createRoom(name: string, isPrivate = false): Promise<Room> {
   const c = initClient();
-  const r = await c.create('my_room', { name });
+  const r = await c.create('my_room', { name, isPrivate });
   return setupRoom(r);
 }
 
@@ -80,7 +80,7 @@ export function getRoom(): Room | undefined {
 
 export async function joinAnyRoom(name: string): Promise<Room> {
   const c = initClient();
-  const r = await c.join('my_room', { name });
+  const r = await c.join('my_room', { name, isPrivate: false });
   return setupRoom(r);
 }
 

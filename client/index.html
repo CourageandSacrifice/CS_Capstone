@@ -75,6 +75,21 @@
         <button class="mode-btn active" id="host-btn">HOST</button>
         <button class="mode-btn" id="join-btn">JOIN</button>
       </div>
+
+      <!-- HOST sub-options -->
+      <div id="host-options" class="sub-options">
+        <button class="sub-btn active" id="public-btn">PUBLIC</button>
+        <button class="sub-btn" id="private-btn">PRIVATE</button>
+      </div>
+
+      <!-- JOIN sub-options -->
+      <div id="join-options" class="sub-options hidden">
+        <button class="sub-btn active" id="random-btn">RANDOM</button>
+        <button class="sub-btn" id="code-btn">ENTER CODE</button>
+        <input id="room-code-input" type="text" maxlength="12"
+               placeholder="ROOM CODE" autocomplete="off" spellcheck="false" class="hidden" />
+      </div>
+
       <button class="play-btn" id="play-btn">▶&nbsp; PLAY</button>
     </footer>
 

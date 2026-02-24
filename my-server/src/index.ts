@@ -13,4 +13,4 @@ import { listen } from "@colyseus/tools";
 import app from "./app.config.js";
 
 // Create and listen on 2567 (or PORT environment variable.)
-listen(app);
+listen(app, Number(process.env.PORT || 2567));
