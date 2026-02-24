@@ -6,19 +6,13 @@ import {
     createRouter,
     createEndpoint,
 } from "colyseus";
-import { RedisPresence } from "@colyseus/redis-presence";
-import { RedisDriver } from "@colyseus/redis-driver";
 
 /**
  * Import your Room files
  */
 import { MyRoom } from "./rooms/MyRoom.js";
 
-const REDIS_URL = process.env.REDIS_URL || "redis://localhost:6379";
-
 const server = defineServer({
-    presence: new RedisPresence(REDIS_URL),
-    driver: new RedisDriver(REDIS_URL),
 
     /**
      * Define your room handlers:
