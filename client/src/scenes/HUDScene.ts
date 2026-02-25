@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { ClassData } from '../data/Classes';
 import type { GameScene } from './GameScene';
 import { createRoom, joinAnyRoom, joinRoom, reconnect, hasReconnectionToken, clearReconnectionData, leaveRoom } from '../network/Network';
+import { MAP_W, MAP_H, TILE_SIZE, BUILDINGS } from '../map/CampusMap';
 
 export class HUDScene extends Phaser.Scene {
   private classData!: ClassData;
@@ -19,6 +20,12 @@ export class HUDScene extends Phaser.Scene {
 
   private isHost = false;
   private endGameBtn?: Phaser.GameObjects.Container;
+
+  private readonly MINIMAP_W = 160;
+  private readonly MINIMAP_H = 120;
+  private readonly MINIMAP_Y = 10;
+  private minimapX = 0;
+  private minimapDots!: Phaser.GameObjects.Graphics;
 
   constructor() {
     super('HUDScene');
@@ -124,6 +131,30 @@ export class HUDScene extends Phaser.Scene {
       strokeThickness: 3,
     });
 
+    // Minimap (top right)
+    this.minimapX = width - this.MINIMAP_W - 10;
+    const mmBg = this.add.graphics();
+    mmBg.fillStyle(0x000000, 0.6);
+    mmBg.fillRect(this.minimapX, this.MINIMAP_Y, this.MINIMAP_W, this.MINIMAP_H);
+    // Buildings on minimap
+    for (const b of BUILDINGS) {
+      const bx = this.minimapX + (b.x / MAP_W) * this.MINIMAP_W;
+      const by = this.MINIMAP_Y + (b.y / MAP_H) * this.MINIMAP_H;
+      const bw = (b.w / MAP_W) * this.MINIMAP_W;
+      const bh = (b.h / MAP_H) * this.MINIMAP_H;
+      mmBg.fillStyle(b.color, 0.85);
+      mmBg.fillRect(bx, by, bw, bh);
+    }
+
+    mmBg.lineStyle(1, 0xffffff, 0.35);
+    mmBg.strokeRect(this.minimapX, this.MINIMAP_Y, this.MINIMAP_W, this.MINIMAP_H);
+    this.add.text(this.minimapX + this.MINIMAP_W / 2, this.MINIMAP_Y + 3, 'MAP', {
+      fontFamily: 'Courier New, monospace',
+      fontSize: '10px',
+      color: '#aaaaaa',
+    }).setOrigin(0.5, 0);
+    this.minimapDots = this.add.graphics();
+
     // Return to lobby button (bottom right)
     this.createButton(width - 172, height - 60, '← LOBBY', 0x1a3a7a, async () => {
       await leaveRoom();
@@ -205,8 +236,8 @@ export class HUDScene extends Phaser.Scene {
       });
       this.add.existing(copyBtn);
 
-      // End game button (top right)
-      this.endGameBtn = this.createButton(width - 116, 16, 'END GAME', 0x880000, () => {
+      // End game button (below minimap)
+      this.endGameBtn = this.createButton(width - 116, this.MINIMAP_Y + this.MINIMAP_H + 8, 'END GAME', 0x880000, () => {
         this.gameScene.sendEndGame();
         if (this.endGameBtn) this.endGameBtn.setVisible(false);
       });
@@ -329,5 +360,31 @@ export class HUDScene extends Phaser.Scene {
       this.dashText.setText(`DASH: ${pips}`);
       this.dashText.setColor('#2a9d8f');
     }
+
+    this.updateMinimap();
+  }
+
+  private updateMinimap(): void {
+    if (!this.gameScene.player || !this.minimapDots) return;
+    const worldW = MAP_W * TILE_SIZE;
+    const worldH = MAP_H * TILE_SIZE;
+
+    this.minimapDots.clear();
+
+    // Remote players — white dots
+    this.gameScene.getRemotePlayers().forEach((rp) => {
+      if (!rp.alive) return;
+      const mx = this.minimapX + (rp.sprite.x / worldW) * this.MINIMAP_W;
+      const my = this.MINIMAP_Y + (rp.sprite.y / worldH) * this.MINIMAP_H;
+      this.minimapDots.fillStyle(0xffffff, 1);
+      this.minimapDots.fillCircle(mx, my, 2);
+    });
+
+    // Local player — red dot
+    const { x, y } = this.gameScene.player;
+    const mx = this.minimapX + (x / worldW) * this.MINIMAP_W;
+    const my = this.MINIMAP_Y + (y / worldH) * this.MINIMAP_H;
+    this.minimapDots.fillStyle(0xff0000, 1);
+    this.minimapDots.fillCircle(mx, my, 3);
   }
 }

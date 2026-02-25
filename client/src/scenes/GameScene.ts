@@ -54,7 +54,8 @@ export class GameScene extends Phaser.Scene {
     const spawnY = 36 * TILE_SIZE + TILE_SIZE / 2;
     this.player = new Player(this, spawnX, spawnY, this.classData);
 
-    // Camera
+    // Camera — zoom so exactly 40 tiles fit across the 1280px canvas
+    this.cameras.main.setZoom(this.cameras.main.width / (40 * TILE_SIZE));
     this.cameras.main.setBounds(0, 0, worldW, worldH);
     this.cameras.main.startFollow(this.player.sprite, true, 0.1, 0.1);
     this.cameras.main.setBackgroundColor('#1a1a2e');
@@ -187,6 +188,10 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  getRemotePlayers(): Map<string, RemotePlayer> {
+    return this.remotePlayers;
+  }
+
   sendEndGame(): void {
     sendEndGame();
   }
@@ -275,7 +280,7 @@ export class GameScene extends Phaser.Scene {
       this.add
         .text(cx, cy, b.name, {
           fontFamily: 'Courier New, monospace',
-          fontSize: '14px',
+          fontSize: '20px',
           color: '#ffffff',
           stroke: '#000000',
           strokeThickness: 3,
