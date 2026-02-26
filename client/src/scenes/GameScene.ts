@@ -7,7 +7,7 @@ import {
   MAP_W,
   MAP_H,
 } from '../map/CampusMap';
-import { ClassData, DEFAULT_CLASS } from '../data/Classes';
+import { ClassData, DEFAULT_CLASS, CHARACTERS } from '../data/Classes';
 import { Player } from '../entities/Player';
 import { RemotePlayer } from '../entities/RemotePlayer';
 import { sendPosition, sendAttack, sendEndGame } from '../network/Network';
@@ -38,8 +38,17 @@ export class GameScene extends Phaser.Scene {
     super('GameScene');
   }
 
+  preload(): void {
+    for (const char of CHARACTERS) {
+      this.load.spritesheet(char.spriteKey, `/characters/${char.spriteKey}.png`, {
+        frameWidth: 16,
+        frameHeight: 16,
+      });
+    }
+  }
+
   init(data?: { classData?: ClassData }): void {
-    this.classData = data?.classData ?? DEFAULT_CLASS;
+    this.classData = data?.classData ?? this.registry.get('classData') ?? DEFAULT_CLASS;
   }
 
   create(): void {
@@ -48,6 +57,7 @@ export class GameScene extends Phaser.Scene {
 
     this.drawMap();
     this.drawBuildingLabels();
+    this.createCharacterAnimations();
 
     // Spawn on the left spine path near Craton
     const spawnX = 30 * TILE_SIZE + TILE_SIZE / 2;
@@ -137,6 +147,7 @@ export class GameScene extends Phaser.Scene {
         playerState.y,
         playerState.name || sessionId.slice(0, 4),
         playerState.color,
+        playerState.spriteKey || 'julz',
       );
       remote.updateHp(playerState.hp, playerState.maxHp);
       remote.setAlive(playerState.alive);
@@ -228,6 +239,43 @@ export class GameScene extends Phaser.Scene {
     if (this.eliminatedOverlay) {
       this.eliminatedOverlay.destroy();
       this.eliminatedOverlay = undefined;
+    }
+  }
+
+  private createCharacterAnimations(): void {
+    // Row layout (1-based from user spec), 4 frames per row:
+    // 1=idle right, 2=idle left, 3=idle front, 4=idle back
+    // 5=run right,  6=run left,  7=run down,   8=run up
+    // 9=sprint right, 10=sprint left, 11=sprint down, 12=sprint up
+    const animDefs = [
+      { suffix: 'idle_right',    row: 0,  fps: 6  },
+      { suffix: 'idle_left',     row: 1,  fps: 6  },
+      { suffix: 'idle_down',     row: 2,  fps: 6  },
+      { suffix: 'idle_up',       row: 3,  fps: 6  },
+      { suffix: 'run_right',     row: 4,  fps: 8  },
+      { suffix: 'run_left',      row: 5,  fps: 8  },
+      { suffix: 'run_down',      row: 6,  fps: 8  },
+      { suffix: 'run_up',        row: 7,  fps: 8  },
+      { suffix: 'sprint_right',  row: 8,  fps: 12 },
+      { suffix: 'sprint_left',   row: 9,  fps: 12 },
+      { suffix: 'sprint_down',   row: 10, fps: 12 },
+      { suffix: 'sprint_up',     row: 11, fps: 12 },
+    ];
+
+    for (const char of CHARACTERS) {
+      for (const def of animDefs) {
+        const key = `${char.spriteKey}_${def.suffix}`;
+        if (this.anims.exists(key)) continue;
+        this.anims.create({
+          key,
+          frames: this.anims.generateFrameNumbers(char.spriteKey, {
+            start: def.row * 4,
+            end:   def.row * 4 + 3,
+          }),
+          frameRate: def.fps,
+          repeat: -1,
+        });
+      }
     }
   }
 

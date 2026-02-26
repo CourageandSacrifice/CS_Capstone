@@ -201,15 +201,16 @@ export class HUDScene extends Phaser.Scene {
     const username = this.registry.get('username') as string ?? 'Player';
     const isPrivate = this.registry.get('isPrivate') as boolean ?? false;
     const roomCode = this.registry.get('roomCode') as string ?? '';
+    const spriteKey = (this.registry.get('classData') as ClassData | undefined)?.spriteKey ?? 'julz';
     try {
       this.roomCodeText.setText('Connecting...').setColor('#ffff00');
       let room;
       if (mode === 'host') {
-        room = await createRoom(username, isPrivate);
+        room = await createRoom(username, isPrivate, spriteKey);
       } else if (roomCode) {
-        room = await joinRoom(roomCode, username);
+        room = await joinRoom(roomCode, username, spriteKey);
       } else {
-        room = await joinAnyRoom(username);
+        room = await joinAnyRoom(username, spriteKey);
       }
       this.isHost = mode === 'host';
       this.onConnected(room.roomId);

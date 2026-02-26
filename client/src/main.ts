@@ -4,7 +4,7 @@ import { HUDScene } from './scenes/HUDScene';
 import { initLobby } from './lobby';
 import './style.css';
 
-initLobby().then(({ username, mode, isPrivate, roomCode }) => {
+initLobby().then(({ username, mode, isPrivate, roomCode, classData }) => {
   const config: Phaser.Types.Core.GameConfig = {
     type: Phaser.AUTO,
     title: 'Campus Clash',
@@ -25,4 +25,5 @@ initLobby().then(({ username, mode, isPrivate, roomCode }) => {
   game.registry.set('mode', mode);
   game.registry.set('isPrivate', isPrivate);
   game.registry.set('roomCode', roomCode);
+  game.registry.set('classData', classData);
 });

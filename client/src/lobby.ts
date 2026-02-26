@@ -1,10 +1,14 @@
+import { CHARACTERS, ClassData } from './data/Classes';
+
 const USERNAME_KEY = 'cc_username';
+const CHARACTER_KEY = 'cc_character';
 
 export interface LobbyResult {
   username: string;
   mode: 'host' | 'join';
   isPrivate: boolean;
   roomCode: string;
+  classData: ClassData;
 }
 
 export function initLobby(): Promise<LobbyResult> {
@@ -42,6 +46,73 @@ function showLogin(resolve: (r: LobbyResult) => void): void {
   setTimeout(() => input.focus(), 50);
 }
 
+function drawCenterStage(canvas: HTMLCanvasElement, spriteKey: string): void {
+  const ctx = canvas.getContext('2d')!;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const img = new Image();
+  img.onload = () => {
+    ctx.imageSmoothingEnabled = false;
+    // col=1, row=0 → source x=16, y=0, 16×16 → dest 128×128 (8x)
+    ctx.drawImage(img, 16, 0, 16, 16, 0, 0, 256, 256);
+  };
+  img.src = `/characters/${spriteKey}.png`;
+}
+
+function getCategory(char: ClassData): string {
+  if (char.maxHp >= 150) return 'Guard';
+  if (char.maxHp >= 120) return 'Warrior';
+  return 'Citizen';
+}
+
+function buildLockerGrid(
+  container: HTMLElement,
+  selectedKey: string,
+  onSelect: (char: ClassData) => void,
+): void {
+  container.innerHTML = '';
+  const grid = document.createElement('div');
+  grid.className = 'locker-grid';
+
+  for (const char of CHARACTERS) {
+    const card = document.createElement('div');
+    card.className = 'char-card';
+    if (char.spriteKey === selectedKey) card.classList.add('selected');
+    card.dataset.key = char.spriteKey;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 64;
+    canvas.height = 64;
+
+    const img = new Image();
+    img.onload = () => {
+      const ctx = canvas.getContext('2d')!;
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(img, 16, 0, 16, 16, 0, 0, 64, 64);
+    };
+    img.src = `/characters/${char.spriteKey}.png`;
+
+    const nameEl = document.createElement('div');
+    nameEl.className = 'char-card-name';
+    nameEl.textContent = char.name;
+
+    const catEl = document.createElement('div');
+    catEl.className = 'char-card-cat';
+    catEl.textContent = getCategory(char);
+
+    card.append(canvas, nameEl, catEl);
+
+    card.addEventListener('click', () => {
+      grid.querySelectorAll('.char-card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+      onSelect(char);
+    });
+
+    grid.appendChild(card);
+  }
+
+  container.appendChild(grid);
+}
+
 function showLobby(username: string, resolve: (r: LobbyResult) => void): void {
   const screen = document.getElementById('lobby-screen')!;
   const nameEl = document.getElementById('lobby-username')!;
@@ -50,6 +121,46 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void): void {
   nameEl.textContent = username;
   avatarEl.textContent = username.slice(0, 2).toUpperCase();
   screen.classList.remove('hidden');
+
+  // ── Character selection ──
+  const savedKey = localStorage.getItem(CHARACTER_KEY) ?? 'julz';
+  let classData: ClassData = CHARACTERS.find(c => c.spriteKey === savedKey) ?? CHARACTERS[0];
+
+  const charPreview = document.getElementById('char-preview') as HTMLCanvasElement;
+  const charNameLabel = document.getElementById('char-name-label')!;
+  drawCenterStage(charPreview, classData.spriteKey);
+  charNameLabel.textContent = classData.name.toUpperCase();
+
+  // ── Nav tabs ──
+  const navLobby = document.getElementById('nav-lobby')!;
+  const navLocker = document.getElementById('nav-locker')!;
+  const lobbyStage = document.getElementById('lobby-stage')!;
+  const lockerPanel = document.getElementById('locker-panel')!;
+  let lockerBuilt = false;
+
+  navLobby.addEventListener('click', () => {
+    navLobby.classList.add('active');
+    navLocker.classList.remove('active');
+    lobbyStage.classList.remove('hidden');
+    lockerPanel.classList.add('hidden');
+  });
+
+  navLocker.addEventListener('click', () => {
+    navLocker.classList.add('active');
+    navLobby.classList.remove('active');
+    lobbyStage.classList.add('hidden');
+    lockerPanel.classList.remove('hidden');
+
+    if (!lockerBuilt) {
+      buildLockerGrid(lockerPanel, classData.spriteKey, (newChar) => {
+        classData = newChar;
+        localStorage.setItem(CHARACTER_KEY, classData.spriteKey);
+        drawCenterStage(charPreview, classData.spriteKey);
+        charNameLabel.textContent = classData.name.toUpperCase();
+      });
+      lockerBuilt = true;
+    }
+  });
 
   let mode: 'host' | 'join' = 'host';
   let isPrivate = false;
@@ -90,7 +201,6 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void): void {
     joinOptions.classList.remove('hidden');
     hostOptions.classList.add('hidden');
     isPrivate = false;
-    // Reset join sub-state
     roomCode = '';
     randomBtn.classList.add('active');
     codeBtn.classList.remove('active');
@@ -133,7 +243,6 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void): void {
 
   // ── Play ──
   playBtn.addEventListener('click', () => {
-    // Validate: if joining by code, must have a code
     if (mode === 'join' && codeBtn.classList.contains('active') && !roomCode) {
       roomCodeInput.classList.add('shake');
       setTimeout(() => roomCodeInput.classList.remove('shake'), 400);
@@ -144,6 +253,6 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void): void {
     screen.classList.add('hidden');
     const container = document.getElementById('game-container')!;
     container.style.display = 'flex';
-    resolve({ username, mode, isPrivate, roomCode });
+    resolve({ username, mode, isPrivate, roomCode, classData });
   });
 }

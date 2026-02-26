@@ -25,10 +25,8 @@
     <header class="lobby-header">
       <div class="lobby-logo">CAMPUS CLASH</div>
       <nav class="lobby-nav">
-        <button class="nav-tab active">LOBBY</button>
-        <button class="nav-tab nav-disabled">
-          LOCKER <span class="soon-tag">COMING SOON</span>
-        </button>
+        <button class="nav-tab active" id="nav-lobby">LOBBY</button>
+        <button class="nav-tab" id="nav-locker">LOCKER</button>
         <button class="nav-tab nav-disabled">
           LEADERBOARD <span class="soon-tag">COMING SOON</span>
         </button>
@@ -48,25 +46,15 @@
         </div>
       </aside>
 
-      <main class="lobby-stage">
+      <main class="lobby-stage" id="lobby-stage">
         <div class="character-showcase">
-          <div class="character-placeholder">
-            <div class="char-silhouette">
-              <svg viewBox="0 0 80 160" xmlns="http://www.w3.org/2000/svg" fill="rgba(100,160,255,0.15)" stroke="rgba(100,160,255,0.4)" stroke-width="1.5">
-                <circle cx="40" cy="22" r="16"/>
-                <rect x="22" y="42" width="36" height="52" rx="6"/>
-                <rect x="10" y="44" width="14" height="42" rx="5"/>
-                <rect x="56" y="44" width="14" height="42" rx="5"/>
-                <rect x="22" y="96" width="15" height="50" rx="5"/>
-                <rect x="43" y="96" width="15" height="50" rx="5"/>
-              </svg>
-            </div>
-            <div class="char-label">SELECT CHARACTER</div>
-            <div class="char-sub">LOCKER COMING SOON</div>
-          </div>
+          <canvas id="char-preview" width="256" height="256"></canvas>
+          <div class="char-label" id="char-name-label">SELECT CHARACTER</div>
           <div class="stage-disc"></div>
         </div>
       </main>
+
+      <div id="locker-panel" class="hidden"></div>
 
     </div>
 

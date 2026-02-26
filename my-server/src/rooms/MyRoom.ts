@@ -111,6 +111,9 @@ export class MyRoom extends Room {
     player.name = (typeof options?.name === "string" && options.name.trim())
       ? options.name.trim().slice(0, 16)
       : `Player${this.playerIndex}`;
+    player.spriteKey = (typeof options?.spriteKey === "string" && options.spriteKey.trim())
+      ? options.spriteKey.trim()
+      : "julz";
 
     this.state.players.set(client.sessionId, player);
     console.log(client.sessionId, `joined as "${player.name}"! Players:`, this.state.players.size);

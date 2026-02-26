@@ -9,6 +9,7 @@ export class PlayerState extends Schema {
   @type("number") maxHp: number = 100;
   @type("boolean") alive: boolean = true;
   @type("number") kills: number = 0;
+  @type("string") spriteKey: string = "julz";
 }
 
 export class MyRoomState extends Schema {

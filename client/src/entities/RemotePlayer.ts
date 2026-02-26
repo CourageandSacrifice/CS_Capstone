@@ -6,32 +6,37 @@ export class RemotePlayer {
   hp = 100;
   maxHp = 100;
 
-  private body: Phaser.GameObjects.Graphics;
-  private eyes: Phaser.GameObjects.Graphics;
+  private body: Phaser.GameObjects.Sprite;
   private label: Phaser.GameObjects.Text;
   private hpBarBg: Phaser.GameObjects.Graphics;
   private hpBarFill: Phaser.GameObjects.Graphics;
-  private color: number;
+  private spriteKey: string;
   private facingX = 0;
-  private facingY = 1;
+  private facingY = 1; // default facing down
+  private currentAnim = '';
+  private isMoving = false;
 
-  constructor(scene: Phaser.Scene, x: number, y: number, name: string, color: number) {
-    this.color = color;
+  constructor(
+    scene: Phaser.Scene,
+    x: number,
+    y: number,
+    name: string,
+    _color: number,
+    spriteKey = 'julz',
+  ) {
+    this.spriteKey = spriteKey;
+
     this.sprite = scene.add.container(x, y);
-    this.sprite.setSize(14, 14);
+    this.sprite.setSize(30, 30);
 
-    this.body = scene.add.graphics();
-    this.drawBody(color);
+    this.body = scene.add.sprite(0, 0, spriteKey);
+    this.body.setScale(2); // 16px frame × 2 = 32px = 2 tiles
     this.sprite.add(this.body);
 
-    this.eyes = scene.add.graphics();
-    this.drawEyes();
-    this.sprite.add(this.eyes);
-
-    // HP bar background
+    // HP bar background — positioned above 2x sprite (top edge at y=-16)
     this.hpBarBg = scene.add.graphics();
     this.hpBarBg.fillStyle(0x333333, 1);
-    this.hpBarBg.fillRect(-10, -18, 20, 3);
+    this.hpBarBg.fillRect(-10, -22, 20, 3);
     this.sprite.add(this.hpBarBg);
 
     // HP bar fill
@@ -39,7 +44,7 @@ export class RemotePlayer {
     this.drawHpBar();
     this.sprite.add(this.hpBarFill);
 
-    this.label = scene.add.text(0, -24, name, {
+    this.label = scene.add.text(0, -28, name, {
       fontFamily: 'Courier New, monospace',
       fontSize: '9px',
       color: '#ffffff',
@@ -49,34 +54,22 @@ export class RemotePlayer {
     this.sprite.add(this.label);
 
     this.sprite.setDepth(10);
+
+    // Start idle-down animation immediately
+    this.playAnim(`${spriteKey}_idle_down`);
   }
 
-  private drawBody(color: number): void {
-    this.body.clear();
-    this.body.fillStyle(color, 1);
-    this.body.fillRect(-7, -7, 14, 14);
-    this.body.lineStyle(1, 0x000000, 1);
-    this.body.strokeRect(-7, -7, 14, 14);
+  private getDirection(): string {
+    if (this.facingY > 0) return 'down';
+    if (this.facingY < 0) return 'up';
+    if (this.facingX < 0) return 'left';
+    return 'right';
   }
 
-  private drawEyes(): void {
-    this.eyes.clear();
-    this.eyes.fillStyle(0xffffff, 1);
-
-    let ex1: number, ey1: number, ex2: number, ey2: number;
-
-    if (this.facingY < 0) {
-      ex1 = -3; ey1 = -4; ex2 = 3; ey2 = -4;
-    } else if (this.facingY > 0) {
-      ex1 = -3; ey1 = 2; ex2 = 3; ey2 = 2;
-    } else if (this.facingX < 0) {
-      ex1 = -4; ey1 = -2; ex2 = -4; ey2 = 3;
-    } else {
-      ex1 = 4; ey1 = -2; ex2 = 4; ey2 = 3;
-    }
-
-    this.eyes.fillCircle(ex1, ey1, 1.5);
-    this.eyes.fillCircle(ex2, ey2, 1.5);
+  private playAnim(key: string): void {
+    if (this.currentAnim === key) return;
+    this.currentAnim = key;
+    this.body.play(key);
   }
 
   private drawHpBar(): void {
@@ -84,7 +77,7 @@ export class RemotePlayer {
     const ratio = this.hp / this.maxHp;
     const color = ratio > 0.5 ? 0x00ff00 : ratio > 0.25 ? 0xffff00 : 0xff0000;
     this.hpBarFill.fillStyle(color, 1);
-    this.hpBarFill.fillRect(-10, -18, Math.floor(20 * ratio), 3);
+    this.hpBarFill.fillRect(-10, -22, Math.floor(20 * ratio), 3);
   }
 
   updateHp(hp: number, maxHp: number): void {
@@ -94,9 +87,9 @@ export class RemotePlayer {
   }
 
   takeDamageFlash(): void {
-    this.drawBody(0xff0000);
+    this.body.setTint(0xff0000);
     this.sprite.scene.time.delayedCall(100, () => {
-      if (this.alive) this.drawBody(this.color);
+      this.body.clearTint();
     });
   }
 
@@ -108,12 +101,20 @@ export class RemotePlayer {
   updatePosition(x: number, y: number): void {
     const dx = x - this.sprite.x;
     const dy = y - this.sprite.y;
+    const dist = Math.abs(dx) + Math.abs(dy);
 
-    if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
+    if (dist > 0.5) {
+      // Update facing — Y-axis priority matches Player.getDirection()
       this.facingX = dx !== 0 ? Math.sign(dx) : 0;
       this.facingY = dy !== 0 ? Math.sign(dy) : 0;
-      this.drawEyes();
+      this.isMoving = true;
+    } else {
+      this.isMoving = false;
     }
+
+    const dir = this.getDirection();
+    const state = this.isMoving ? 'run' : 'idle';
+    this.playAnim(`${this.spriteKey}_${state}_${dir}`);
 
     const scene = this.sprite.scene;
     scene.tweens.add({

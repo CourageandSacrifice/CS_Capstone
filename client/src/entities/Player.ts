@@ -21,8 +21,7 @@ export class Player {
 
   sprite: Phaser.GameObjects.Container;
 
-  private body: Phaser.GameObjects.Graphics;
-  private eyes: Phaser.GameObjects.Graphics;
+  private body: Phaser.GameObjects.Sprite;
   private nameLabel?: Phaser.GameObjects.Text;
   private lastAttackTime = 0;
   alive = true;
@@ -30,10 +29,11 @@ export class Player {
   private dashStartTime = 0;
   dashCharges = 3;
   private readonly MAX_DASH_CHARGES = 3;
-  private dashChargeCooldown = 0;   // small delay between individual dashes
-  dashRechargeCooldown = 0;         // long cooldown when all charges depleted
+  private dashChargeCooldown = 0;
+  dashRechargeCooldown = 0;
   private facingX = 0;
-  private facingY = 1;
+  private facingY = 1; // default facing down
+  private currentAnim = '';
 
   constructor(scene: Phaser.Scene, x: number, y: number, classData: ClassData) {
     this.scene = scene;
@@ -46,24 +46,21 @@ export class Player {
     this.attackRate = classData.attackRate;
 
     this.sprite = scene.add.container(x, y);
-    this.sprite.setSize(14, 14);
+    this.sprite.setSize(30, 30);
 
-    // Body
-    this.body = scene.add.graphics();
-    this.drawBodyColor(classData.color);
+    this.body = scene.add.sprite(0, 0, classData.spriteKey);
+    this.body.setScale(2); // 16px frame × 2 = 32px = 2 tiles
     this.sprite.add(this.body);
 
-    // Eyes
-    this.eyes = scene.add.graphics();
-    this.drawEyes();
-    this.sprite.add(this.eyes);
-
     this.sprite.setDepth(10);
+
+    // Start idle-down animation immediately
+    this.playAnim(`${classData.spriteKey}_idle_down`);
   }
 
   setNameLabel(name: string): void {
     if (this.nameLabel) this.nameLabel.destroy();
-    this.nameLabel = this.scene.add.text(0, -14, name, {
+    this.nameLabel = this.scene.add.text(0, -22, name, {
       fontFamily: 'Courier New, monospace',
       fontSize: '9px',
       color: '#ffffff',
@@ -73,32 +70,17 @@ export class Player {
     this.sprite.add(this.nameLabel);
   }
 
-  private drawBodyColor(color: number): void {
-    this.body.clear();
-    this.body.fillStyle(color, 1);
-    this.body.fillRect(-7, -7, 14, 14);
-    this.body.lineStyle(1, 0x000000, 1);
-    this.body.strokeRect(-7, -7, 14, 14);
+  private getDirection(): string {
+    if (this.facingY > 0) return 'down';
+    if (this.facingY < 0) return 'up';
+    if (this.facingX < 0) return 'left';
+    return 'right';
   }
 
-  private drawEyes(): void {
-    this.eyes.clear();
-    this.eyes.fillStyle(0xffffff, 1);
-
-    let ex1: number, ey1: number, ex2: number, ey2: number;
-
-    if (this.facingY < 0) {
-      ex1 = -3; ey1 = -4; ex2 = 3; ey2 = -4;
-    } else if (this.facingY > 0) {
-      ex1 = -3; ey1 = 2; ex2 = 3; ey2 = 2;
-    } else if (this.facingX < 0) {
-      ex1 = -4; ey1 = -2; ex2 = -4; ey2 = 3;
-    } else {
-      ex1 = 4; ey1 = -2; ex2 = 4; ey2 = 3;
-    }
-
-    this.eyes.fillCircle(ex1, ey1, 1.5);
-    this.eyes.fillCircle(ex2, ey2, 1.5);
+  private playAnim(key: string): void {
+    if (this.currentAnim === key) return;
+    this.currentAnim = key;
+    this.body.play(key);
   }
 
   update(time: number, delta: number, cursors: CursorKeys): void {
@@ -110,10 +92,10 @@ export class Player {
     if (cursors.up.isDown) vy = -1;
     else if (cursors.down.isDown) vy = 1;
 
-    if (vx !== 0 || vy !== 0) {
+    const isMoving = vx !== 0 || vy !== 0;
+    if (isMoving) {
       this.facingX = vx;
       this.facingY = vy;
-      this.drawEyes();
     }
 
     // Dash duration check
@@ -121,6 +103,15 @@ export class Player {
       this.isDashing = false;
     }
 
+    // Animation state machine
+    const dir = this.getDirection();
+    let state: string;
+    if (this.isDashing && isMoving) state = 'sprint';
+    else if (isMoving) state = 'run';
+    else state = 'idle';
+    this.playAnim(`${this.classData.spriteKey}_${state}_${dir}`);
+
+    // Dash charge recharge
     if (this.dashChargeCooldown > 0) {
       this.dashChargeCooldown -= delta;
     }
@@ -128,7 +119,6 @@ export class Player {
       this.dashRechargeCooldown -= delta;
       if (this.dashRechargeCooldown <= 0) {
         this.dashCharges++;
-        // If still missing charges, keep recharging at the normal rate
         if (this.dashCharges < this.MAX_DASH_CHARGES) {
           this.dashRechargeCooldown = 3000;
         }
@@ -139,7 +129,6 @@ export class Player {
     let moveX = vx;
     let moveY = vy;
 
-    // Normalize diagonal
     if (moveX !== 0 && moveY !== 0) {
       moveX *= 0.707;
       moveY *= 0.707;
@@ -149,7 +138,7 @@ export class Player {
     const newX = this.sprite.x + moveX * dist;
     const newY = this.sprite.y + moveY * dist;
 
-    const half = 6;
+    const half = 15; // accurate to 32px sprite (±16), 1px inset
 
     if (this.canMove(newX, this.sprite.y, half)) {
       this.sprite.x = newX;
@@ -181,16 +170,14 @@ export class Player {
     this.dashCharges--;
     this.dashChargeCooldown = 400;
 
-    // Start recharge timer if not already running
     if (this.dashRechargeCooldown <= 0) {
-      // Longer penalty if this was the last charge
       this.dashRechargeCooldown = this.dashCharges === 0 ? 7000 : 3000;
     }
 
     // Flash white
-    this.drawBodyColor(0xffffff);
+    this.body.setTint(0xffffff);
     this.scene.time.delayedCall(100, () => {
-      this.drawBodyColor(this.classData.color);
+      this.body.clearTint();
     });
   }
 
@@ -224,8 +211,8 @@ export class Player {
 
   private showAttackVisual(): void {
     const g = this.scene.add.graphics();
-    const sx = this.sprite.x + this.facingX * 14;
-    const sy = this.sprite.y + this.facingY * 14;
+    const sx = this.sprite.x + this.facingX * 20;
+    const sy = this.sprite.y + this.facingY * 20;
     g.fillStyle(0xffffff, 0.8);
     g.fillCircle(sx, sy, 6);
     g.setDepth(11);
@@ -234,9 +221,9 @@ export class Player {
 
   takeDamage(amount: number): void {
     this.hp = Math.max(0, this.hp - amount);
-    this.drawBodyColor(0xff0000);
+    this.body.setTint(0xff4444);
     this.scene.time.delayedCall(100, () => {
-      this.drawBodyColor(this.classData.color);
+      this.body.clearTint();
     });
     this.scene.events.emit('playerHpChanged', this.hp, this.maxHp);
   }
