@@ -150,6 +150,8 @@ export class Player {
     // Horizontal flip for characters without directional left sprites
     if (this.classData.flipForLeft) {
       this.body.setFlipX(this.facingX < 0);
+    } else if (this.classData.flipForRight) {
+      this.body.setFlipX(this.facingX > 0);
     }
 
     // Animation state machine — attack anim blocks others until complete
@@ -244,6 +246,7 @@ export class Player {
     this.currentAnim = animKey;
     this.body.stop();
     if (this.classData.flipForLeft) this.body.setFlipX(this.facingX < 0);
+    else if (this.classData.flipForRight) this.body.setFlipX(this.facingX > 0);
     this.body.play(animKey);
     // When the animation finishes, return to idle/run
     this.body.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {

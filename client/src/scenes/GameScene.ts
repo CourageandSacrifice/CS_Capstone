@@ -53,12 +53,12 @@ export class GameScene extends Phaser.Scene {
           { frameWidth: 96, frameHeight: 80 });
       }
     }
-    // RPGMCharacter — down/up/side variants (side shared for left+right via flipX)
+    // RPGMCharacter — down/up/side variants; sheets are 2 rows of 64px each
     for (const state of ['idle', 'walk', 'attack']) {
       for (const variant of ['down', 'up', 'side']) {
         this.load.spritesheet(`rpgm_${variant}_${state}`,
           `/characters/rpgm_${variant}_${state}.png`,
-          { frameWidth: 64, frameHeight: 128 });
+          { frameWidth: 64, frameHeight: 64 });
       }
     }
   }

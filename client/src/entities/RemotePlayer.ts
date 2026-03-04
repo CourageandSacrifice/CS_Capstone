@@ -14,6 +14,7 @@ export class RemotePlayer {
   private hpBarFill: Phaser.GameObjects.Graphics;
   private spriteKey: string;
   private flipForLeft: boolean;
+  private flipForRight: boolean;
   private facingX = 0;
   private facingY = 1; // default facing down
   private currentAnim = '';
@@ -29,6 +30,7 @@ export class RemotePlayer {
   ) {
     this.spriteKey = classData.spriteKey;
     this.flipForLeft = classData.flipForLeft;
+    this.flipForRight = classData.flipForRight ?? false;
 
     this.sprite = scene.add.container(x, y);
     this.sprite.setSize(30, 30);
@@ -103,6 +105,7 @@ export class RemotePlayer {
     this.currentAnim = key;
     this.body.stop();
     if (this.flipForLeft) this.body.setFlipX(dirX < 0);
+    else if (this.flipForRight) this.body.setFlipX(dirX > 0);
     this.body.play(key);
     this.body.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
       this.currentAnim = '';
@@ -158,6 +161,7 @@ export class RemotePlayer {
     if (!this.alive) return; // don't override death pose with movement anim
 
     if (this.flipForLeft) this.body.setFlipX(this.facingX < 0);
+    else if (this.flipForRight) this.body.setFlipX(this.facingX > 0);
     const dir = this.getDirection();
     this.playAnim(`${this.spriteKey}_${this.isMoving ? 'run' : 'idle'}_${dir}`);
 

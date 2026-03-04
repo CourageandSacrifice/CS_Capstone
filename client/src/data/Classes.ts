@@ -10,6 +10,7 @@ export interface ClassData {
   spriteKey: string;
   scale: number;
   flipForLeft: boolean;
+  flipForRight?: boolean;
   defaultTexture: string;
   frameWidth: number;
   frameHeight: number;
@@ -42,9 +43,9 @@ export const CHARACTERS: ClassData[] = [
     maxHp: 130, speed: 105, attackDamage: 28, attackRange: 36, attackRate: 450,
     weaponName: 'Battle Axe',
     spriteKey: 'rpgm',
-    scale: 0.50, flipForLeft: true,
+    scale: 0.75, flipForLeft: false, flipForRight: true,
     defaultTexture: 'rpgm_down_idle',
-    frameWidth: 64, frameHeight: 128,
+    frameWidth: 64, frameHeight: 64,
   },
 ];
 
