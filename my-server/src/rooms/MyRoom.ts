@@ -1,6 +1,17 @@
 import { Room, Client, CloseCode } from "colyseus";
 import { MyRoomState, PlayerState } from "./schema/MyRoomState.js";
 
+// Generate a short memorable room code like "FIRE" or "WOLF"
+const WORDS = [
+  "FIRE","WOLF","BEAR","HAWK","LION","TIGER","STORM","BLADE",
+  "IRON","GOLD","MOON","STAR","ROCK","BOLT","FROST","RAGE",
+  "CROW","VIPER","DUKE","ACE","NOVA","DUSK","PIKE","ZEAL",
+];
+function makeRoomCode(): string {
+  return WORDS[Math.floor(Math.random() * WORDS.length)] +
+         Math.floor(Math.random() * 100).toString().padStart(2, '0');
+}
+
 const TILE_SIZE = 16;
 const MAP_W = 150;
 const MAP_H = 105;
@@ -43,7 +54,7 @@ export class MyRoom extends Room {
       player.y = Math.max(0, Math.min(WORLD_H, y));
     },
 
-    attack: (client: Client, message: { targetId: string }) => {
+    attack: (client: Client, message: { targetId: string; dirX?: number; dirY?: number }) => {
       const attacker = this.state.players.get(client.sessionId);
       if (!attacker || !attacker.alive) return;
 
@@ -57,12 +68,31 @@ export class MyRoom extends Room {
       if (now - last < ATTACK_RATE) return;
 
       // Distance check
-      const dx = attacker.x - target.x;
-      const dy = attacker.y - target.y;
+      const dx = target.x - attacker.x;
+      const dy = target.y - attacker.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
       if (dist > ATTACK_RANGE) return;
 
+      // Directional check — target must be within 120° cone in front of attacker
+      const dirX = typeof message.dirX === 'number' ? message.dirX : 0;
+      const dirY = typeof message.dirY === 'number' ? message.dirY : 1;
+      const dirLen = Math.sqrt(dirX * dirX + dirY * dirY);
+      if (dist > 0 && dirLen > 0) {
+        const dot = (dx / dist) * (dirX / dirLen) + (dy / dist) * (dirY / dirLen);
+        if (dot < 0.5) return; // outside 120° cone (cos 60° = 0.5)
+      }
+
       this.lastAttackTime.set(client.sessionId, now);
+
+      // Broadcast attack visual to all clients
+      this.broadcast('attackEffect', {
+        attackerId: client.sessionId,
+        targetId,
+        x: attacker.x,
+        y: attacker.y,
+        dirX,
+        dirY,
+      });
 
       target.hp -= ATTACK_DAMAGE;
       if (target.hp <= 0) {
@@ -91,8 +121,12 @@ export class MyRoom extends Room {
     },
   }
 
-  onCreate (options: any) {
-    console.log("Room created!");
+  async onCreate (options: any) {
+    this.roomId = makeRoomCode();
+    if (options?.isPrivate === true) {
+      await this.setPrivate(true);
+    }
+    console.log(`Room created! ID: ${this.roomId}`, options?.isPrivate ? "(private)" : "(public)");
   }
 
   onJoin (client: Client, options: any) {
@@ -113,7 +147,7 @@ export class MyRoom extends Room {
       : `Player${this.playerIndex}`;
     player.spriteKey = (typeof options?.spriteKey === "string" && options.spriteKey.trim())
       ? options.spriteKey.trim()
-      : "julz";
+      : "archer";
 
     this.state.players.set(client.sessionId, player);
     console.log(client.sessionId, `joined as "${player.name}"! Players:`, this.state.players.size);
