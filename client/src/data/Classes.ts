@@ -24,7 +24,7 @@ export const CHARACTERS: ClassData[] = [
     spriteKey: 'knight',
     scale: 0.456, flipForLeft: true,
     defaultTexture: 'knight_idle',
-    frameWidth: 84, frameHeight: 84,
+    frameWidth: 96, frameHeight: 84,
   },
   {
     name: 'Adventurer',

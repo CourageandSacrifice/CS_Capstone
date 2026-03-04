@@ -40,10 +40,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   preload(): void {
-    // Knight — idle is 84px wide per frame; all others are 96px wide
-    this.load.spritesheet('knight_idle', '/characters/knight_idle.png',
-      { frameWidth: 84, frameHeight: 84 });
-    for (const state of ['walk', 'run', 'attack', 'death']) {
+    // Knight — all frames are 96px wide
+    for (const state of ['idle', 'walk', 'run', 'attack', 'death']) {
       this.load.spritesheet(`knight_${state}`, `/characters/knight_${state}.png`,
         { frameWidth: 96, frameHeight: 84 });
     }
@@ -292,7 +290,7 @@ export class GameScene extends Phaser.Scene {
 
     // KNIGHT — all 4 dirs share the same texture; flipX handles left visually
     const knightDefs = [
-      { state: 'idle',   texture: 'knight_idle',   end: 7,  fps: 8,  repeat: -1 },
+      { state: 'idle',   texture: 'knight_idle',   end: 6,  fps: 8,  repeat: -1 },
       { state: 'run',    texture: 'knight_walk',   end: 7,  fps: 8,  repeat: -1 },
       { state: 'sprint', texture: 'knight_run',    end: 7,  fps: 12, repeat: -1 },
       { state: 'attack', texture: 'knight_attack', end: 5,  fps: 12, repeat: 0  },
