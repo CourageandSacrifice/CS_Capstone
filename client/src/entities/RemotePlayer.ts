@@ -95,13 +95,13 @@ export class RemotePlayer {
   }
 
   showAttackEffect(dirX: number, dirY: number): void {
-    // Play attack sprite animation (once), then resume idle/run
     const dir = this.dirToString(dirX, dirY);
     const key = `${this.spriteKey}_attack_${dir}`;
     this.currentAnim = key;
-    this.body.play({ key, repeat: 0 });
-    this.body.once('animationcomplete', () => {
-      this.currentAnim = ''; // allow updatePosition to resume normal anim
+    this.body.stop();
+    this.body.play(key);
+    this.body.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+      this.currentAnim = '';
     });
     drawSlash(this.sprite.scene, this.sprite.x, this.sprite.y, dirX, dirY);
   }

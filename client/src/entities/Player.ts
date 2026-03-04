@@ -67,8 +67,7 @@ export class Player {
   private body: Phaser.GameObjects.Sprite;
   private nameLabel?: Phaser.GameObjects.Text;
   private lastAttackTime = 0;
-  private isAttacking = false;
-  private attackAnimEndTime = 0;
+  isAttacking = false;
   alive = true;
   isDashing = false;
   private dashStartTime = 0;
@@ -148,14 +147,8 @@ export class Player {
       this.isDashing = false;
     }
 
-    // Animation state machine
+    // Animation state machine — attack anim blocks others until complete
     const dir = this.getDirection();
-    if (this.isAttacking) {
-      if (time >= this.attackAnimEndTime) {
-        this.isAttacking = false;
-        this.currentAnim = ''; // allow transition back to idle/run
-      }
-    }
     if (!this.isAttacking) {
       let state: string;
       if (this.isDashing && isMoving) state = 'sprint';
@@ -239,17 +232,20 @@ export class Player {
     remotePlayers: Map<string, { sprite: Phaser.GameObjects.Container; alive: boolean }>,
     sendAttackFn: (id: string, dirX: number, dirY: number) => void,
   ): void {
-    // Always play the attack animation regardless of damage cooldown
-    if (!this.isAttacking) {
-      this.isAttacking = true;
-      this.attackAnimEndTime = time + 350;
-      const dir = this.getDirection();
+    // Always play attack animation on every keypress
+    const dir = this.getDirection();
+    const animKey = `${this.classData.spriteKey}_attack_${dir}`;
+    this.isAttacking = true;
+    this.currentAnim = animKey;
+    this.body.stop();
+    this.body.play(animKey);
+    // When the animation finishes, return to idle/run
+    this.body.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+      this.isAttacking = false;
       this.currentAnim = '';
-      this.body.play({ key: `${this.classData.spriteKey}_attack_${dir}`, repeat: 0 });
-      this.currentAnim = `${this.classData.spriteKey}_attack_${dir}`;
-    }
+    });
 
-    // Damage is rate-limited separately
+    // Damage is rate-limited
     if (time - this.lastAttackTime < this.attackRate) return;
     this.lastAttackTime = time;
 
