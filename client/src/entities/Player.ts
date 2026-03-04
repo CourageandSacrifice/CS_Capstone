@@ -67,6 +67,8 @@ export class Player {
   private body: Phaser.GameObjects.Sprite;
   private nameLabel?: Phaser.GameObjects.Text;
   private lastAttackTime = 0;
+  private isAttacking = false;
+  private attackAnimEndTime = 0;
   alive = true;
   isDashing = false;
   private dashStartTime = 0;
@@ -148,11 +150,19 @@ export class Player {
 
     // Animation state machine
     const dir = this.getDirection();
-    let state: string;
-    if (this.isDashing && isMoving) state = 'sprint';
-    else if (isMoving) state = 'run';
-    else state = 'idle';
-    this.playAnim(`${this.classData.spriteKey}_${state}_${dir}`);
+    if (this.isAttacking) {
+      if (time >= this.attackAnimEndTime) {
+        this.isAttacking = false;
+        this.currentAnim = ''; // allow transition back to idle/run
+      }
+    }
+    if (!this.isAttacking) {
+      let state: string;
+      if (this.isDashing && isMoving) state = 'sprint';
+      else if (isMoving) state = 'run';
+      else state = 'idle';
+      this.playAnim(`${this.classData.spriteKey}_${state}_${dir}`);
+    }
 
     // Dash charge recharge
     if (this.dashChargeCooldown > 0) {
@@ -227,28 +237,29 @@ export class Player {
   tryAttack(
     time: number,
     remotePlayers: Map<string, { sprite: Phaser.GameObjects.Container; alive: boolean }>,
-    sendAttackFn: (id: string) => void,
+    sendAttackFn: (id: string, dirX: number, dirY: number) => void,
   ): void {
     if (time - this.lastAttackTime < this.attackRate) return;
 
-    let hit = false;
+    // Always play attack animation and reset cooldown when O is pressed
+    this.lastAttackTime = time;
+    this.isAttacking = true;
+    this.attackAnimEndTime = time + 350;
+    const dir = this.getDirection();
+    this.currentAnim = '';
+    this.body.play({ key: `${this.classData.spriteKey}_attack_${dir}`, repeat: 0 });
+    this.currentAnim = `${this.classData.spriteKey}_attack_${dir}`;
+
     remotePlayers.forEach((rp, id) => {
       if (!rp.alive) return;
       const dist = Phaser.Math.Distance.Between(
-        this.sprite.x,
-        this.sprite.y,
-        rp.sprite.x,
-        rp.sprite.y,
+        this.sprite.x, this.sprite.y,
+        rp.sprite.x, rp.sprite.y,
       );
       if (dist <= this.attackRange) {
-        sendAttackFn(id);
-        hit = true;
+        sendAttackFn(id, this.facingX, this.facingY);
       }
     });
-
-    if (hit) {
-      this.lastAttackTime = time;
-    }
   }
 
   takeDamage(amount: number): void {

@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ClassData } from '../data/Classes';
+import { ClassData, CHARACTERS } from '../data/Classes';
 import type { GameScene } from './GameScene';
 import { createRoom, joinAnyRoom, joinRoom, reconnect, hasReconnectionToken, clearReconnectionData, leaveRoom } from '../network/Network';
 import { MAP_W, MAP_H, TILE_SIZE, BUILDINGS } from '../map/CampusMap';
@@ -201,7 +201,7 @@ export class HUDScene extends Phaser.Scene {
     const username = this.registry.get('username') as string ?? 'Player';
     const isPrivate = this.registry.get('isPrivate') as boolean ?? false;
     const roomCode = this.registry.get('roomCode') as string ?? '';
-    const spriteKey = (this.registry.get('classData') as ClassData | undefined)?.spriteKey ?? 'julz';
+    const spriteKey = (this.registry.get('classData') as ClassData | undefined)?.spriteKey ?? CHARACTERS[0].spriteKey;
     try {
       this.roomCodeText.setText('Connecting...').setColor('#ffff00');
       let room;

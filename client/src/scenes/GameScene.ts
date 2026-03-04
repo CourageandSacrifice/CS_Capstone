@@ -265,23 +265,24 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createCharacterAnimations(): void {
-    // Row layout (1-based from user spec), 4 frames per row:
-    // 1=idle right, 2=idle left, 3=idle front, 4=idle back
-    // 5=run right,  6=run left,  7=run down,   8=run up
-    // 9=sprint right, 10=sprint left, 11=sprint down, 12=sprint up
     const animDefs = [
-      { suffix: 'idle_right',    row: 0,  fps: 6  },
-      { suffix: 'idle_left',     row: 1,  fps: 6  },
-      { suffix: 'idle_down',     row: 2,  fps: 6  },
-      { suffix: 'idle_up',       row: 3,  fps: 6  },
-      { suffix: 'run_right',     row: 4,  fps: 8  },
-      { suffix: 'run_left',      row: 5,  fps: 8  },
-      { suffix: 'run_down',      row: 6,  fps: 8  },
-      { suffix: 'run_up',        row: 7,  fps: 8  },
-      { suffix: 'sprint_right',  row: 8,  fps: 12 },
-      { suffix: 'sprint_left',   row: 9,  fps: 12 },
-      { suffix: 'sprint_down',   row: 10, fps: 12 },
-      { suffix: 'sprint_up',     row: 11, fps: 12 },
+      { suffix: 'idle_right',    row: 0,  fps: 6,  repeat: -1 },
+      { suffix: 'idle_left',     row: 1,  fps: 6,  repeat: -1 },
+      { suffix: 'idle_down',     row: 2,  fps: 6,  repeat: -1 },
+      { suffix: 'idle_up',       row: 3,  fps: 6,  repeat: -1 },
+      { suffix: 'run_right',     row: 4,  fps: 8,  repeat: -1 },
+      { suffix: 'run_left',      row: 5,  fps: 8,  repeat: -1 },
+      { suffix: 'run_down',      row: 6,  fps: 8,  repeat: -1 },
+      { suffix: 'run_up',        row: 7,  fps: 8,  repeat: -1 },
+      { suffix: 'sprint_right',  row: 8,  fps: 12, repeat: -1 },
+      { suffix: 'sprint_left',   row: 9,  fps: 12, repeat: -1 },
+      { suffix: 'sprint_down',   row: 10, fps: 12, repeat: -1 },
+      { suffix: 'sprint_up',     row: 11, fps: 12, repeat: -1 },
+      // Attack animations — play once (repeat: 0)
+      { suffix: 'attack_right',  row: 12, fps: 12, repeat: 0 },
+      { suffix: 'attack_left',   row: 13, fps: 12, repeat: 0 },
+      { suffix: 'attack_down',   row: 14, fps: 12, repeat: 0 },
+      { suffix: 'attack_up',     row: 15, fps: 12, repeat: 0 },
     ];
 
     for (const char of CHARACTERS) {
@@ -295,7 +296,7 @@ export class GameScene extends Phaser.Scene {
             end:   def.row * 4 + 3,
           }),
           frameRate: def.fps,
-          repeat: -1,
+          repeat: def.repeat,
         });
       }
     }

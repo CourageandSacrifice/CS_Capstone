@@ -95,7 +95,22 @@ export class RemotePlayer {
   }
 
   showAttackEffect(dirX: number, dirY: number): void {
+    // Play attack sprite animation (once), then resume idle/run
+    const dir = this.dirToString(dirX, dirY);
+    const key = `${this.spriteKey}_attack_${dir}`;
+    this.currentAnim = key;
+    this.body.play({ key, repeat: 0 });
+    this.body.once('animationcomplete', () => {
+      this.currentAnim = ''; // allow updatePosition to resume normal anim
+    });
     drawSlash(this.sprite.scene, this.sprite.x, this.sprite.y, dirX, dirY);
+  }
+
+  private dirToString(dirX: number, dirY: number): string {
+    if (dirY > 0) return 'down';
+    if (dirY < 0) return 'up';
+    if (dirX < 0) return 'left';
+    return 'right';
   }
 
   setAlive(alive: boolean): void {

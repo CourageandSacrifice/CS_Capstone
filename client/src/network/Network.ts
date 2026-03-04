@@ -34,19 +34,19 @@ function setupRoom(r: Room): Room {
   return room;
 }
 
-export async function autoJoin(name: string, spriteKey = 'julz'): Promise<Room> {
+export async function autoJoin(name: string, spriteKey = 'archer'): Promise<Room> {
   const c = initClient();
   const r = await c.joinOrCreate('my_room', { name, spriteKey });
   return setupRoom(r);
 }
 
-export async function createRoom(name: string, isPrivate = false, spriteKey = 'julz'): Promise<Room> {
+export async function createRoom(name: string, isPrivate = false, spriteKey = 'archer'): Promise<Room> {
   const c = initClient();
   const r = await c.create('my_room', { name, isPrivate, spriteKey });
   return setupRoom(r);
 }
 
-export async function joinRoom(roomId: string, name: string, spriteKey = 'julz'): Promise<Room> {
+export async function joinRoom(roomId: string, name: string, spriteKey = 'archer'): Promise<Room> {
   const c = initClient();
   const r = await c.joinById(roomId, { name, spriteKey });
   return setupRoom(r);
@@ -78,7 +78,7 @@ export function getRoom(): Room | undefined {
   return room;
 }
 
-export async function joinAnyRoom(name: string, spriteKey = 'julz'): Promise<Room> {
+export async function joinAnyRoom(name: string, spriteKey = 'archer'): Promise<Room> {
   const c = initClient();
   const r = await c.join('my_room', { name, isPrivate: false, spriteKey });
   return setupRoom(r);
@@ -89,9 +89,9 @@ export function sendPosition(x: number, y: number): void {
   room.send('move', { x, y });
 }
 
-export function sendAttack(targetId: string): void {
+export function sendAttack(targetId: string, dirX: number, dirY: number): void {
   if (!room) return;
-  room.send('attack', { targetId });
+  room.send('attack', { targetId, dirX, dirY });
 }
 
 export function sendEndGame(): void {
