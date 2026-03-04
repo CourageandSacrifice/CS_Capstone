@@ -239,16 +239,19 @@ export class Player {
     remotePlayers: Map<string, { sprite: Phaser.GameObjects.Container; alive: boolean }>,
     sendAttackFn: (id: string, dirX: number, dirY: number) => void,
   ): void {
-    if (time - this.lastAttackTime < this.attackRate) return;
+    // Always play the attack animation regardless of damage cooldown
+    if (!this.isAttacking) {
+      this.isAttacking = true;
+      this.attackAnimEndTime = time + 350;
+      const dir = this.getDirection();
+      this.currentAnim = '';
+      this.body.play({ key: `${this.classData.spriteKey}_attack_${dir}`, repeat: 0 });
+      this.currentAnim = `${this.classData.spriteKey}_attack_${dir}`;
+    }
 
-    // Always play attack animation and reset cooldown when O is pressed
+    // Damage is rate-limited separately
+    if (time - this.lastAttackTime < this.attackRate) return;
     this.lastAttackTime = time;
-    this.isAttacking = true;
-    this.attackAnimEndTime = time + 350;
-    const dir = this.getDirection();
-    this.currentAnim = '';
-    this.body.play({ key: `${this.classData.spriteKey}_attack_${dir}`, repeat: 0 });
-    this.currentAnim = `${this.classData.spriteKey}_attack_${dir}`;
 
     remotePlayers.forEach((rp, id) => {
       if (!rp.alive) return;
