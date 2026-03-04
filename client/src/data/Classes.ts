@@ -22,7 +22,7 @@ export const CHARACTERS: ClassData[] = [
     maxHp: 150, speed: 90, attackDamage: 35, attackRange: 40, attackRate: 500,
     weaponName: 'Sword',
     spriteKey: 'knight',
-    scale: 0.38, flipForLeft: true,
+    scale: 0.456, flipForLeft: true,
     defaultTexture: 'knight_idle',
     frameWidth: 84, frameHeight: 84,
   },

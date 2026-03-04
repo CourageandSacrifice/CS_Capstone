@@ -40,10 +40,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   preload(): void {
-    // Knight — one texture per animation state (non-directional, flipX for left)
-    for (const state of ['idle', 'walk', 'run', 'attack', 'death']) {
+    // Knight — idle is 84px wide per frame; all others are 96px wide
+    this.load.spritesheet('knight_idle', '/characters/knight_idle.png',
+      { frameWidth: 84, frameHeight: 84 });
+    for (const state of ['walk', 'run', 'attack', 'death']) {
       this.load.spritesheet(`knight_${state}`, `/characters/knight_${state}.png`,
-        { frameWidth: 84, frameHeight: 84 });
+        { frameWidth: 96, frameHeight: 84 });
     }
     // Adventurer — one texture per state+direction
     for (const state of ['idle', 'run', 'attack']) {
@@ -291,10 +293,10 @@ export class GameScene extends Phaser.Scene {
     // KNIGHT — all 4 dirs share the same texture; flipX handles left visually
     const knightDefs = [
       { state: 'idle',   texture: 'knight_idle',   end: 7,  fps: 8,  repeat: -1 },
-      { state: 'run',    texture: 'knight_walk',   end: 8,  fps: 8,  repeat: -1 },
-      { state: 'sprint', texture: 'knight_run',    end: 8,  fps: 12, repeat: -1 },
+      { state: 'run',    texture: 'knight_walk',   end: 7,  fps: 8,  repeat: -1 },
+      { state: 'sprint', texture: 'knight_run',    end: 7,  fps: 12, repeat: -1 },
       { state: 'attack', texture: 'knight_attack', end: 5,  fps: 12, repeat: 0  },
-      { state: 'death',  texture: 'knight_death',  end: 12, fps: 10, repeat: 0  },
+      { state: 'death',  texture: 'knight_death',  end: 11, fps: 10, repeat: 0  },
     ];
     for (const def of knightDefs) {
       for (const dir of dirs) {
