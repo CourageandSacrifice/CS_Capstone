@@ -1,7 +1,7 @@
 # Campus Clash
 
 ## Overview
-Campus Clash is a top-down multiplayer arena game set on a college campus. Players log in with a username, choose to host or join a room from the lobby, then battle other players in real time. All rendering is procedural (no sprite sheets). The game is fully deployed and playable across different devices and networks.
+Campus Clash is a top-down multiplayer arena game set on a college campus. Players log in with a username, choose to host or join a room from the lobby, then battle other players in real time. The game is fully deployed and playable across different devices and networks.
 
 ---
 
@@ -95,7 +95,8 @@ Campus Clash/
 │   ├── .env.local                  # Local overrides (gitignored)
 │   ├── public/
 │   │   ├── favicon.png             # Red 16x16 favicon
-│   │   └── lobby-bg.jpg            # Campus building photo (lobby background)
+│   │   ├── lobby-bg.jpg            # Campus building photo (lobby background)
+│   │   └── characters/             # 26 sprite PNGs (knight, adventurer, rpgm — separate file per anim state)
 │   └── src/
 │       ├── main.ts                 # Phaser game config, boot after lobby resolves
 │       ├── lobby.ts                # Login + lobby HTML logic, returns {username, mode}
@@ -109,7 +110,7 @@ Campus Clash/
 │       ├── map/
 │       │   └── CampusMap.ts        # 200x150 tile grid (16px tiles = 3200x2400 world)
 │       ├── data/
-│       │   └── Classes.ts          # 7 character class definitions (name, hp, speed, weapon)
+│       │   └── Classes.ts          # 3 character class definitions (Knight, Adventurer, Warrior)
 │       └── network/
 │           └── Network.ts          # Colyseus client: createRoom, joinAnyRoom, reconnect, leaveRoom, sendEndGame
 │
@@ -161,9 +162,30 @@ Campus Clash/
 
 ---
 
+## Character Sprite System
+
+### 3 Characters
+| Name | spriteKey | Frame size | Directional |
+|------|-----------|-----------|-------------|
+| Knight | `knight` | 84×84 | flipX for left |
+| Adventurer | `adventurer` | 80×80 | true 4-dir sprites |
+| Warrior | `rpgm` | 64×128 | down/up/side (flipX for left/right) |
+
+### Architecture
+- Separate PNG per animation state (+ direction for Adventurer): 26 total files in `client/public/characters/`
+- Phaser auto-switches textures via frame data — **no `setTexture()` calls anywhere**
+- Animation key convention: `{spriteKey}_{state}_{dir}` (e.g. `knight_run_down`, `adventurer_attack_left`)
+- Knight anims: all 4 dirs reference same texture; `flipForLeft: true` handles left visually
+- Adventurer anims: each dir references its own texture (e.g. `adventurer_run_left`); `flipForLeft: false`
+- RPGM anims: left+right both reference `side` texture; `flipForLeft: true`
+- Death anim exists only for Knight; Adventurer/Warrior hide sprite on death instead
+- `ClassData` fields: `scale`, `flipForLeft`, `defaultTexture`, `frameWidth`, `frameHeight`
+
+---
+
 ## Conventions
 - TypeScript strict mode, ES module imports (`import`/`export`)
-- All gameplay rendering is procedural (Phaser Graphics API) — no sprite sheets
+- Map rendering is procedural (Phaser Graphics API); characters use sprite sheets
 - 16px tile size, 200x150 grid = 3200x2400 world
 - Tile collision via grid lookup — no physics engine
 - HUD runs as a parallel Phaser scene (fixed camera overlay)

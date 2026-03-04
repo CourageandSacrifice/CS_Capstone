@@ -46,16 +46,22 @@ function showLogin(resolve: (r: LobbyResult) => void): void {
   setTimeout(() => input.focus(), 50);
 }
 
-function drawCenterStage(canvas: HTMLCanvasElement, spriteKey: string): void {
+function drawCenterStage(canvas: HTMLCanvasElement, char: ClassData): void {
   const ctx = canvas.getContext('2d')!;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   const img = new Image();
   img.onload = () => {
     ctx.imageSmoothingEnabled = false;
-    // col=1, row=0 → source x=16, y=0, 16×16 → dest 128×128 (8x)
-    ctx.drawImage(img, 16, 0, 16, 16, 0, 0, 256, 256);
+    // Draw first frame of defaultTexture, scaled to fill the canvas
+    const fw = char.frameWidth;
+    const fh = char.frameHeight;
+    const aspect = fh / fw;
+    const destW = canvas.width;
+    const destH = Math.min(canvas.height, Math.round(destW * aspect));
+    const destY = Math.round((canvas.height - destH) / 2);
+    ctx.drawImage(img, 0, 0, fw, fh, 0, destY, destW, destH);
   };
-  img.src = `/characters/${spriteKey}.png`;
+  img.src = `/characters/${char.defaultTexture}.png`;
 }
 
 function getCategory(char: ClassData): string {
@@ -87,9 +93,15 @@ function buildLockerGrid(
     img.onload = () => {
       const ctx = canvas.getContext('2d')!;
       ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(img, 16, 0, 16, 16, 0, 0, 64, 64);
+      const fw = char.frameWidth;
+      const fh = char.frameHeight;
+      const aspect = fh / fw;
+      const destW = canvas.width;
+      const destH = Math.min(canvas.height, Math.round(destW * aspect));
+      const destY = Math.round((canvas.height - destH) / 2);
+      ctx.drawImage(img, 0, 0, fw, fh, 0, destY, destW, destH);
     };
-    img.src = `/characters/${char.spriteKey}.png`;
+    img.src = `/characters/${char.defaultTexture}.png`;
 
     const nameEl = document.createElement('div');
     nameEl.className = 'char-card-name';
@@ -128,7 +140,7 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void): void {
 
   const charPreview = document.getElementById('char-preview') as HTMLCanvasElement;
   const charNameLabel = document.getElementById('char-name-label')!;
-  drawCenterStage(charPreview, classData.spriteKey);
+  drawCenterStage(charPreview, classData);
   charNameLabel.textContent = classData.name.toUpperCase();
 
   // ── Nav tabs ──
@@ -155,7 +167,7 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void): void {
       buildLockerGrid(lockerPanel, classData.spriteKey, (newChar) => {
         classData = newChar;
         localStorage.setItem(CHARACTER_KEY, classData.spriteKey);
-        drawCenterStage(charPreview, classData.spriteKey);
+        drawCenterStage(charPreview, classData);
         charNameLabel.textContent = classData.name.toUpperCase();
       });
       lockerBuilt = true;

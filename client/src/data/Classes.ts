@@ -8,23 +8,44 @@ export interface ClassData {
   attackRate: number;
   weaponName: string;
   spriteKey: string;
+  scale: number;
+  flipForLeft: boolean;
+  defaultTexture: string;
+  frameWidth: number;
+  frameHeight: number;
 }
 
-const WARRIOR: Pick<ClassData, 'maxHp' | 'speed' | 'attackDamage' | 'attackRange' | 'attackRate'> = {
-  maxHp: 120, speed: 100, attackDamage: 30, attackRange: 35, attackRate: 500,
-};
-const GUARD: Pick<ClassData, 'maxHp' | 'speed' | 'attackDamage' | 'attackRange' | 'attackRate'> = {
-  maxHp: 150, speed: 90, attackDamage: 25, attackRange: 32, attackRate: 500,
-};
-
 export const CHARACTERS: ClassData[] = [
-  // Warriors
-  { name: 'Archer',         color: 0xe9c46a, ...WARRIOR, weaponName: 'Bow',            spriteKey: 'archer'         },
-  { name: 'Shield Fighter', color: 0x264653, ...WARRIOR, weaponName: 'Sword & Shield', spriteKey: 'shield_fighter' },
-  // Guards
-  { name: 'Guard Archer',   color: 0x9eb0c2, ...GUARD,   weaponName: 'Bow',            spriteKey: 'guard_archer'   },
-  { name: 'Guard Spearman', color: 0x7a8fa6, ...GUARD,   weaponName: 'Spear',          spriteKey: 'guard_spearman' },
-  { name: 'Guard Swordsman', color: 0x6b7fa8, ...GUARD,  weaponName: 'Sword',          spriteKey: 'guard_swordsman' },
+  {
+    name: 'Knight',
+    color: 0x888888,
+    maxHp: 150, speed: 90, attackDamage: 35, attackRange: 40, attackRate: 500,
+    weaponName: 'Sword',
+    spriteKey: 'knight',
+    scale: 0.38, flipForLeft: true,
+    defaultTexture: 'knight_idle',
+    frameWidth: 84, frameHeight: 84,
+  },
+  {
+    name: 'Adventurer',
+    color: 0x4a9eff,
+    maxHp: 100, speed: 120, attackDamage: 25, attackRange: 32, attackRate: 400,
+    weaponName: 'Daggers',
+    spriteKey: 'adventurer',
+    scale: 0.40, flipForLeft: false,
+    defaultTexture: 'adventurer_idle_down',
+    frameWidth: 80, frameHeight: 80,
+  },
+  {
+    name: 'Warrior',
+    color: 0xd4a017,
+    maxHp: 130, speed: 105, attackDamage: 28, attackRange: 36, attackRate: 450,
+    weaponName: 'Battle Axe',
+    spriteKey: 'rpgm',
+    scale: 0.50, flipForLeft: true,
+    defaultTexture: 'rpgm_down_idle',
+    frameWidth: 64, frameHeight: 128,
+  },
 ];
 
 export const DEFAULT_CLASS: ClassData = CHARACTERS[0];

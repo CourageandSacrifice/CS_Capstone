@@ -92,8 +92,8 @@ export class Player {
     this.sprite = scene.add.container(x, y);
     this.sprite.setSize(30, 30);
 
-    this.body = scene.add.sprite(0, 0, classData.spriteKey);
-    this.body.setScale(2); // 16px frame × 2 = 32px = 2 tiles
+    this.body = scene.add.sprite(0, 0, classData.defaultTexture);
+    this.body.setScale(classData.scale);
     this.sprite.add(this.body);
 
     this.sprite.setDepth(10);
@@ -114,7 +114,7 @@ export class Player {
     this.sprite.add(this.nameLabel);
   }
 
-  private getDirection(): string {
+  getDirection(): string {
     if (this.facingY > 0) return 'down';
     if (this.facingY < 0) return 'up';
     if (this.facingX < 0) return 'left';
@@ -145,6 +145,11 @@ export class Player {
     // Dash duration check
     if (this.isDashing && time - this.dashStartTime > 150) {
       this.isDashing = false;
+    }
+
+    // Horizontal flip for characters without directional left sprites
+    if (this.classData.flipForLeft) {
+      this.body.setFlipX(this.facingX < 0);
     }
 
     // Animation state machine — attack anim blocks others until complete
@@ -238,6 +243,7 @@ export class Player {
     this.isAttacking = true;
     this.currentAnim = animKey;
     this.body.stop();
+    if (this.classData.flipForLeft) this.body.setFlipX(this.facingX < 0);
     this.body.play(animKey);
     // When the animation finishes, return to idle/run
     this.body.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
@@ -268,6 +274,25 @@ export class Player {
       this.body.clearTint();
     });
     this.scene.events.emit('playerHpChanged', this.hp, this.maxHp);
+  }
+
+  playDeath(): void {
+    const dir = this.getDirection();
+    this.isAttacking = false;
+    this.body.stop();
+    const deathKey = `${this.classData.spriteKey}_death_${dir}`;
+    if (this.scene.anims.exists(deathKey)) {
+      this.body.play(deathKey);
+    } else {
+      this.sprite.setVisible(false);
+    }
+  }
+
+  playRespawn(): void {
+    this.isAttacking = false;
+    this.sprite.setVisible(true);
+    this.currentAnim = '';
+    this.body.play(`${this.classData.spriteKey}_idle_down`);
   }
 
   get x(): number { return this.sprite.x; }

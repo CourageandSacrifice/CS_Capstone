@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { drawSlash } from './Player';
+import { ClassData } from '../data/Classes';
 
 export class RemotePlayer {
   sprite: Phaser.GameObjects.Container;
@@ -12,6 +13,7 @@ export class RemotePlayer {
   private hpBarBg: Phaser.GameObjects.Graphics;
   private hpBarFill: Phaser.GameObjects.Graphics;
   private spriteKey: string;
+  private flipForLeft: boolean;
   private facingX = 0;
   private facingY = 1; // default facing down
   private currentAnim = '';
@@ -23,18 +25,19 @@ export class RemotePlayer {
     y: number,
     name: string,
     _color: number,
-    spriteKey = 'archer',
+    classData: ClassData,
   ) {
-    this.spriteKey = spriteKey;
+    this.spriteKey = classData.spriteKey;
+    this.flipForLeft = classData.flipForLeft;
 
     this.sprite = scene.add.container(x, y);
     this.sprite.setSize(30, 30);
 
-    this.body = scene.add.sprite(0, 0, spriteKey);
-    this.body.setScale(2); // 16px frame × 2 = 32px = 2 tiles
+    this.body = scene.add.sprite(0, 0, classData.defaultTexture);
+    this.body.setScale(classData.scale);
     this.sprite.add(this.body);
 
-    // HP bar background — positioned above 2x sprite (top edge at y=-16)
+    // HP bar background — positioned above sprite
     this.hpBarBg = scene.add.graphics();
     this.hpBarBg.fillStyle(0x333333, 1);
     this.hpBarBg.fillRect(-10, -22, 20, 3);
@@ -57,7 +60,7 @@ export class RemotePlayer {
     this.sprite.setDepth(10);
 
     // Start idle-down animation immediately
-    this.playAnim(`${spriteKey}_idle_down`);
+    this.playAnim(`${classData.spriteKey}_idle_down`);
   }
 
   private getDirection(): string {
@@ -99,6 +102,7 @@ export class RemotePlayer {
     const key = `${this.spriteKey}_attack_${dir}`;
     this.currentAnim = key;
     this.body.stop();
+    if (this.flipForLeft) this.body.setFlipX(dirX < 0);
     this.body.play(key);
     this.body.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
       this.currentAnim = '';
@@ -115,7 +119,26 @@ export class RemotePlayer {
 
   setAlive(alive: boolean): void {
     this.alive = alive;
-    this.sprite.setVisible(alive);
+    // Visibility managed by playDeath / playRespawn — not toggled directly here
+  }
+
+  playDeath(): void {
+    const dir = this.getDirection();
+    this.currentAnim = '';
+    this.body.stop();
+    const deathKey = `${this.spriteKey}_death_${dir}`;
+    const scene = this.sprite.scene;
+    if (scene.anims.exists(deathKey)) {
+      this.body.play(deathKey);
+    } else {
+      this.sprite.setVisible(false);
+    }
+  }
+
+  playRespawn(): void {
+    this.currentAnim = '';
+    this.sprite.setVisible(true);
+    this.body.play(`${this.spriteKey}_idle_down`);
   }
 
   updatePosition(x: number, y: number): void {
@@ -132,9 +155,11 @@ export class RemotePlayer {
       this.isMoving = false;
     }
 
+    if (!this.alive) return; // don't override death pose with movement anim
+
+    if (this.flipForLeft) this.body.setFlipX(this.facingX < 0);
     const dir = this.getDirection();
-    const state = this.isMoving ? 'run' : 'idle';
-    this.playAnim(`${this.spriteKey}_${state}_${dir}`);
+    this.playAnim(`${this.spriteKey}_${this.isMoving ? 'run' : 'idle'}_${dir}`);
 
     const scene = this.sprite.scene;
     scene.tweens.add({

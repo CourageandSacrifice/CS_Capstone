@@ -40,15 +40,26 @@ export class GameScene extends Phaser.Scene {
   }
 
   preload(): void {
-    for (const char of CHARACTERS) {
-      this.load.spritesheet(char.spriteKey, `/characters/${char.spriteKey}.png`, {
-        frameWidth: 16,
-        frameHeight: 16,
-      });
-      this.load.spritesheet(`${char.spriteKey}_combat`, `/characters/${char.spriteKey}_combat.png`, {
-        frameWidth: 16,
-        frameHeight: 16,
-      });
+    // Knight — one texture per animation state (non-directional, flipX for left)
+    for (const state of ['idle', 'walk', 'run', 'attack', 'death']) {
+      this.load.spritesheet(`knight_${state}`, `/characters/knight_${state}.png`,
+        { frameWidth: 84, frameHeight: 84 });
+    }
+    // Adventurer — one texture per state+direction
+    for (const state of ['idle', 'run', 'attack']) {
+      for (const dir of ['down', 'up', 'left', 'right']) {
+        this.load.spritesheet(`adventurer_${state}_${dir}`,
+          `/characters/adventurer_${state}_${dir}.png`,
+          { frameWidth: 80, frameHeight: 80 });
+      }
+    }
+    // RPGMCharacter — down/up/side variants (side shared for left+right via flipX)
+    for (const state of ['idle', 'walk', 'attack']) {
+      for (const variant of ['down', 'up', 'side']) {
+        this.load.spritesheet(`rpgm_${variant}_${state}`,
+          `/characters/rpgm_${variant}_${state}.png`,
+          { frameWidth: 64, frameHeight: 128 });
+      }
     }
   }
 
@@ -136,8 +147,10 @@ export class GameScene extends Phaser.Scene {
         $(playerState).listen("alive", () => {
           this.player.alive = playerState.alive;
           if (!playerState.alive) {
+            this.player.playDeath();
             this.showEliminatedOverlay();
           } else {
+            this.player.playRespawn();
             this.hideEliminatedOverlay();
             this.player.sprite.x = playerState.x;
             this.player.sprite.y = playerState.y;
@@ -146,17 +159,15 @@ export class GameScene extends Phaser.Scene {
         return;
       }
 
-      const validKeys = new Set(CHARACTERS.map(c => c.spriteKey));
-      const resolvedKey = validKeys.has(playerState.spriteKey)
-        ? playerState.spriteKey
-        : CHARACTERS[0].spriteKey;
+      const resolvedClassData = CHARACTERS.find(c => c.spriteKey === playerState.spriteKey)
+        ?? CHARACTERS[0];
       const remote = new RemotePlayer(
         this,
         playerState.x,
         playerState.y,
         playerState.name || sessionId.slice(0, 4),
         playerState.color,
-        resolvedKey,
+        resolvedClassData,
       );
       remote.updateHp(playerState.hp, playerState.maxHp);
       remote.setAlive(playerState.alive);
@@ -185,7 +196,13 @@ export class GameScene extends Phaser.Scene {
 
       $(playerState).listen("alive", () => {
         const rp = this.remotePlayers.get(sessionId);
-        if (rp) rp.setAlive(playerState.alive);
+        if (!rp) return;
+        rp.setAlive(playerState.alive);
+        if (!playerState.alive) {
+          rp.playDeath();
+        } else {
+          rp.playRespawn();
+        }
       });
     }, true);
 
@@ -269,54 +286,65 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createCharacterAnimations(): void {
-    // Regular movement animations — non-combat sheet (4 frames per row)
-    const moveDefs = [
-      { suffix: 'idle_right',   row: 0,  fps: 6,  repeat: -1 },
-      { suffix: 'idle_left',    row: 1,  fps: 6,  repeat: -1 },
-      { suffix: 'idle_down',    row: 2,  fps: 6,  repeat: -1 },
-      { suffix: 'idle_up',      row: 3,  fps: 6,  repeat: -1 },
-      { suffix: 'run_right',    row: 4,  fps: 8,  repeat: -1 },
-      { suffix: 'run_left',     row: 5,  fps: 8,  repeat: -1 },
-      { suffix: 'run_down',     row: 6,  fps: 8,  repeat: -1 },
-      { suffix: 'run_up',       row: 7,  fps: 8,  repeat: -1 },
-      { suffix: 'sprint_right', row: 8,  fps: 12, repeat: -1 },
-      { suffix: 'sprint_left',  row: 9,  fps: 12, repeat: -1 },
-      { suffix: 'sprint_down',  row: 10, fps: 12, repeat: -1 },
-      { suffix: 'sprint_up',    row: 11, fps: 12, repeat: -1 },
-    ];
+    const dirs = ['down', 'up', 'left', 'right'];
 
-    // Attack animations — combat sheet (8 frames per row, rows 0-3 = right/left/down/up)
-    const attackDefs = [
-      { suffix: 'attack_right', row: 0, fps: 12, repeat: 0 },
-      { suffix: 'attack_left',  row: 1, fps: 12, repeat: 0 },
-      { suffix: 'attack_down',  row: 2, fps: 12, repeat: 0 },
-      { suffix: 'attack_up',    row: 3, fps: 12, repeat: 0 },
+    // KNIGHT — all 4 dirs share the same texture; flipX handles left visually
+    const knightDefs = [
+      { state: 'idle',   texture: 'knight_idle',   end: 7,  fps: 8,  repeat: -1 },
+      { state: 'run',    texture: 'knight_walk',   end: 8,  fps: 8,  repeat: -1 },
+      { state: 'sprint', texture: 'knight_run',    end: 8,  fps: 12, repeat: -1 },
+      { state: 'attack', texture: 'knight_attack', end: 5,  fps: 12, repeat: 0  },
+      { state: 'death',  texture: 'knight_death',  end: 12, fps: 10, repeat: 0  },
     ];
-
-    for (const char of CHARACTERS) {
-      for (const def of moveDefs) {
-        const key = `${char.spriteKey}_${def.suffix}`;
-        if (this.anims.exists(key)) continue;
+    for (const def of knightDefs) {
+      for (const dir of dirs) {
+        const key = `knight_${def.state}_${dir}`;
+        if (this.anims.exists(key)) this.anims.remove(key);
         this.anims.create({
           key,
-          frames: this.anims.generateFrameNumbers(char.spriteKey, {
-            start: def.row * 4,
-            end:   def.row * 4 + 3,
-          }),
+          frames: this.anims.generateFrameNumbers(def.texture, { start: 0, end: def.end }),
           frameRate: def.fps,
           repeat: def.repeat,
         });
       }
+    }
 
-      for (const def of attackDefs) {
-        const key = `${char.spriteKey}_${def.suffix}`;
-        if (this.anims.exists(key)) continue;
+    // ADVENTURER — separate texture per state+direction
+    const advDefs = [
+      { state: 'idle',   srcState: 'idle',   fps: 8,  repeat: -1 },
+      { state: 'run',    srcState: 'run',    fps: 10, repeat: -1 },
+      { state: 'sprint', srcState: 'run',    fps: 14, repeat: -1 },
+      { state: 'attack', srcState: 'attack', fps: 12, repeat: 0  },
+    ];
+    for (const def of advDefs) {
+      for (const dir of dirs) {
+        const key = `adventurer_${def.state}_${dir}`;
+        if (this.anims.exists(key)) this.anims.remove(key);
         this.anims.create({
           key,
-          frames: this.anims.generateFrameNumbers(`${char.spriteKey}_combat`, {
-            start: def.row * 8,
-            end:   def.row * 8 + 7,
-          }),
+          frames: this.anims.generateFrameNumbers(`adventurer_${def.srcState}_${dir}`, { start: 0, end: 8 }),
+          frameRate: def.fps,
+          repeat: def.repeat,
+        });
+      }
+    }
+
+    // RPGM — down/up unique textures; left+right share 'side' texture (flipX for left)
+    const rpgmDirMap: Record<string, string> = { down: 'down', up: 'up', right: 'side', left: 'side' };
+    const rpgmDefs = [
+      { state: 'idle',   srcState: 'idle',   end: 3, fps: 6,  repeat: -1 },
+      { state: 'run',    srcState: 'walk',   end: 3, fps: 8,  repeat: -1 },
+      { state: 'sprint', srcState: 'walk',   end: 3, fps: 12, repeat: -1 },
+      { state: 'attack', srcState: 'attack', end: 1, fps: 10, repeat: 0  },
+    ];
+    for (const def of rpgmDefs) {
+      for (const dir of dirs) {
+        const key = `rpgm_${def.state}_${dir}`;
+        const texture = `rpgm_${rpgmDirMap[dir]}_${def.srcState}`;
+        if (this.anims.exists(key)) this.anims.remove(key);
+        this.anims.create({
+          key,
+          frames: this.anims.generateFrameNumbers(texture, { start: 0, end: def.end }),
           frameRate: def.fps,
           repeat: def.repeat,
         });
