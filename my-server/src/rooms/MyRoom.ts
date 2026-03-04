@@ -29,6 +29,7 @@ const SPAWN_POINTS = [
 const ATTACK_DAMAGE = 20;
 const ATTACK_RANGE = 30;
 const ATTACK_RATE = 500;
+const HIT_COOLDOWN = ATTACK_RATE / 2; // 250ms — how often a player can be hit
 const RESPAWN_DELAY = 5000;
 
 const PLAYER_COLORS = [0x3498db, 0xe74c3c, 0x2ecc71, 0xf39c12];
@@ -38,6 +39,7 @@ export class MyRoom extends Room {
   state = new MyRoomState();
   private playerIndex = 0;
   private lastAttackTime = new Map<string, number>();
+  private lastHitTime = new Map<string, number>();
   private hostId = '';
 
   messages = {
@@ -62,10 +64,14 @@ export class MyRoom extends Room {
       const target = this.state.players.get(targetId);
       if (!target || !target.alive) return;
 
-      // Rate limit
+      // Rate limit attacker
       const now = Date.now();
       const last = this.lastAttackTime.get(client.sessionId) ?? 0;
       if (now - last < ATTACK_RATE) return;
+
+      // Hit cooldown — target can only be hit once every HIT_COOLDOWN ms
+      const lastHit = this.lastHitTime.get(targetId) ?? 0;
+      if (now - lastHit < HIT_COOLDOWN) return;
 
       // Distance check
       const dx = target.x - attacker.x;
@@ -83,6 +89,7 @@ export class MyRoom extends Room {
       }
 
       this.lastAttackTime.set(client.sessionId, now);
+      this.lastHitTime.set(targetId, now);
 
       // Broadcast attack visual to all clients
       this.broadcast('attackEffect', {
@@ -168,6 +175,7 @@ export class MyRoom extends Room {
   onLeave (client: Client, code: CloseCode) {
     this.state.players.delete(client.sessionId);
     this.lastAttackTime.delete(client.sessionId);
+    this.lastHitTime.delete(client.sessionId);
     console.log(client.sessionId, "left! Players:", this.state.players.size);
   }
 
