@@ -11,6 +11,7 @@ import { ClassData, DEFAULT_CLASS, CHARACTERS } from '../data/Classes';
 import { Player } from '../entities/Player';
 import { RemotePlayer } from '../entities/RemotePlayer';
 import { sendPosition, sendAttack, sendEndGame } from '../network/Network';
+import { drawSlash } from '../entities/Player';
 import { Room, getStateCallbacks } from '@colyseus/sdk';
 
 export class GameScene extends Phaser.Scene {
@@ -141,13 +142,17 @@ export class GameScene extends Phaser.Scene {
         return;
       }
 
+      const validKeys = new Set(CHARACTERS.map(c => c.spriteKey));
+      const resolvedKey = validKeys.has(playerState.spriteKey)
+        ? playerState.spriteKey
+        : CHARACTERS[0].spriteKey;
       const remote = new RemotePlayer(
         this,
         playerState.x,
         playerState.y,
         playerState.name || sessionId.slice(0, 4),
         playerState.color,
-        playerState.spriteKey || 'julz',
+        resolvedKey,
       );
       remote.updateHp(playerState.hp, playerState.maxHp);
       remote.setAlive(playerState.alive);
@@ -196,6 +201,23 @@ export class GameScene extends Phaser.Scene {
       });
       scores.sort((a, b) => b.kills - a.kills);
       this.events.emit('gameOver', scores);
+    });
+
+    room.onMessage('attackEffect', (data: {
+      attackerId: string;
+      targetId: string;
+      x: number;
+      y: number;
+      dirX: number;
+      dirY: number;
+    }) => {
+      if (data.attackerId === room.sessionId) {
+        // Local player's own attack — show at their current position with facing direction
+        drawSlash(this, this.player.x, this.player.y, data.dirX, data.dirY);
+      } else {
+        const rp = this.remotePlayers.get(data.attackerId);
+        if (rp) rp.showAttackEffect(data.dirX, data.dirY);
+      }
     });
   }
 

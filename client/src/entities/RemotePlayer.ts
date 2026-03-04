@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { drawSlash } from './Player';
 
 export class RemotePlayer {
   sprite: Phaser.GameObjects.Container;
@@ -22,7 +23,7 @@ export class RemotePlayer {
     y: number,
     name: string,
     _color: number,
-    spriteKey = 'julz',
+    spriteKey = 'archer',
   ) {
     this.spriteKey = spriteKey;
 
@@ -91,6 +92,10 @@ export class RemotePlayer {
     this.sprite.scene.time.delayedCall(100, () => {
       this.body.clearTint();
     });
+  }
+
+  showAttackEffect(dirX: number, dirY: number): void {
+    drawSlash(this.sprite.scene, this.sprite.x, this.sprite.y, dirX, dirY);
   }
 
   setAlive(alive: boolean): void {

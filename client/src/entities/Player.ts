@@ -2,6 +2,49 @@ import Phaser from 'phaser';
 import { TILE_SIZE, isWalkable } from '../map/CampusMap';
 import { ClassData } from '../data/Classes';
 
+/**
+ * Draw a directional slash arc at world position (wx, wy) facing (dirX, dirY).
+ * Exported so RemotePlayer can use the same visual.
+ */
+export function drawSlash(
+  scene: Phaser.Scene,
+  wx: number,
+  wy: number,
+  dirX: number,
+  dirY: number,
+): void {
+  const g = scene.add.graphics();
+  g.setDepth(12);
+
+  // Base angle from facing direction
+  const baseAngle = Math.atan2(dirY, dirX);
+  const sweepHalf = Math.PI / 3; // 120° total sweep
+  const radius = 24;
+  const steps = 10;
+
+  // Draw a fan arc from -sweepHalf to +sweepHalf
+  for (let i = 0; i < steps; i++) {
+    const t = i / (steps - 1);
+    const angle = baseAngle - sweepHalf + t * sweepHalf * 2;
+    const nx = wx + Math.cos(angle) * radius;
+    const ny = wy + Math.sin(angle) * radius;
+    const alpha = 1 - Math.abs(t - 0.5) * 2; // fade at edges
+    g.fillStyle(0xffffff, alpha * 0.85);
+    g.fillCircle(nx, ny, 4);
+  }
+
+  // Shrink and fade out
+  scene.tweens.add({
+    targets: g,
+    alpha: 0,
+    scaleX: 1.3,
+    scaleY: 1.3,
+    duration: 180,
+    ease: 'Quad.easeOut',
+    onComplete: () => g.destroy(),
+  });
+}
+
 interface CursorKeys {
   up: Phaser.Input.Keyboard.Key;
   down: Phaser.Input.Keyboard.Key;
@@ -205,18 +248,7 @@ export class Player {
 
     if (hit) {
       this.lastAttackTime = time;
-      this.showAttackVisual();
     }
-  }
-
-  private showAttackVisual(): void {
-    const g = this.scene.add.graphics();
-    const sx = this.sprite.x + this.facingX * 20;
-    const sy = this.sprite.y + this.facingY * 20;
-    g.fillStyle(0xffffff, 0.8);
-    g.fillCircle(sx, sy, 6);
-    g.setDepth(11);
-    this.scene.time.delayedCall(100, () => g.destroy());
   }
 
   takeDamage(amount: number): void {

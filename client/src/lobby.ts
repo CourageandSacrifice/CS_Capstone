@@ -123,7 +123,7 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void): void {
   screen.classList.remove('hidden');
 
   // ── Character selection ──
-  const savedKey = localStorage.getItem(CHARACTER_KEY) ?? 'julz';
+  const savedKey = localStorage.getItem(CHARACTER_KEY) ?? CHARACTERS[0].spriteKey;
   let classData: ClassData = CHARACTERS.find(c => c.spriteKey === savedKey) ?? CHARACTERS[0];
 
   const charPreview = document.getElementById('char-preview') as HTMLCanvasElement;
@@ -238,7 +238,7 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void): void {
   });
 
   roomCodeInput.addEventListener('input', () => {
-    roomCode = roomCodeInput.value.trim().toUpperCase();
+    roomCode = roomCodeInput.value.trim();
   });
 
   // ── Play ──
