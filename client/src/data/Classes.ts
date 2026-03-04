@@ -32,9 +32,9 @@ export const CHARACTERS: ClassData[] = [
     maxHp: 100, speed: 120, attackDamage: 25, attackRange: 32, attackRate: 400,
     weaponName: 'Daggers',
     spriteKey: 'adventurer',
-    scale: 0.40, flipForLeft: false,
+    scale: 0.60, flipForLeft: false,
     defaultTexture: 'adventurer_idle_down',
-    frameWidth: 80, frameHeight: 80,
+    frameWidth: 96, frameHeight: 80,
   },
   {
     name: 'Warrior',

@@ -45,12 +45,12 @@ export class GameScene extends Phaser.Scene {
       this.load.spritesheet(`knight_${state}`, `/characters/knight_${state}.png`,
         { frameWidth: 96, frameHeight: 84 });
     }
-    // Adventurer — one texture per state+direction
+    // Adventurer — one texture per state+direction; all frames are 96px wide
     for (const state of ['idle', 'run', 'attack']) {
       for (const dir of ['down', 'up', 'left', 'right']) {
         this.load.spritesheet(`adventurer_${state}_${dir}`,
           `/characters/adventurer_${state}_${dir}.png`,
-          { frameWidth: 80, frameHeight: 80 });
+          { frameWidth: 96, frameHeight: 80 });
       }
     }
     // RPGMCharacter — down/up/side variants (side shared for left+right via flipX)
@@ -322,7 +322,7 @@ export class GameScene extends Phaser.Scene {
         if (this.anims.exists(key)) this.anims.remove(key);
         this.anims.create({
           key,
-          frames: this.anims.generateFrameNumbers(`adventurer_${def.srcState}_${dir}`, { start: 0, end: 8 }),
+          frames: this.anims.generateFrameNumbers(`adventurer_${def.srcState}_${dir}`, { start: 0, end: 7 }),
           frameRate: def.fps,
           repeat: def.repeat,
         });
