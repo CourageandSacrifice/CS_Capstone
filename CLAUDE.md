@@ -26,11 +26,10 @@ Campus Clash is a top-down multiplayer arena game set on a college campus. Playe
   - Production URL: `https://cscapstone-one.vercel.app`
   - Vercel project ID: `prj_ngLa8Tu1kkdi0qtp0GSDtkRth8DC`
   - Org/team ID: `team_Mphd4bwb4tIzNdGBe1NbUbhA`
-- **Backend → Fly.io** — deployed via Docker (`my-server/`)
-  - Production URL: `https://campus-clash.fly.dev`
-  - App name: `campus-clash`, region: `iad` (Ashburn, VA)
-  - Deploy command: `fly deploy --app campus-clash` (run from `my-server/`)
-  - Machine: shared-cpu-1x, 1GB RAM, `auto_stop_machines = stop`, `auto_start_machines = true`
+- **Backend → AWS EC2** — deployed via Docker (`my-server/`)
+  - Production URL: `wss://campusclash.duckdns.org`
+  - EC2 public IP: `18.208.196.236` (us-east-1)
+  - Domain via DuckDNS dynamic DNS pointing to EC2 instance
 
 ---
 
@@ -38,15 +37,15 @@ Campus Clash is a top-down multiplayer arena game set on a college campus. Playe
 
 ### `client/.env` (committed, used in Vercel production)
 ```
-VITE_SERVER_URL=wss://campus-clash.fly.dev
+VITE_SERVER_URL=wss://campusclash.duckdns.org
 ```
 
 ### `client/.env.local` (gitignored, used for local dev)
 ```
-VITE_SERVER_URL=wss://campus-clash.fly.dev
+VITE_SERVER_URL=wss://campusclash.duckdns.org
 VERCEL_OIDC_TOKEN=...  (added by Vercel CLI, do not remove)
 ```
-> Both local dev and production connect to the Fly.io server. Never run the server locally.
+> Both local dev and production connect to the AWS EC2 server. Never run the server locally.
 
 ### `my-server/.env.development` / `.env.production`
 - Used by `dotenv` at runtime inside the Docker container
@@ -202,8 +201,5 @@ Campus Clash/
 | Run frontend locally | `cd client && npm run dev` |
 | Build frontend | `cd client && npm run build` |
 | Deploy frontend | `cd client && vercel --prod` |
-| Deploy server | `cd my-server && fly deploy --app campus-clash` |
-| Check server logs | `fly logs --app campus-clash` |
-| Check server status | `fly status --app campus-clash` |
-| Login to Fly.io | `fly auth login` |
+| SSH to EC2 | `ssh -i <key>.pem ec2-user@18.208.196.236` |
 | Login to Vercel | `vercel login` |
