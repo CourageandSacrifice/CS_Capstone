@@ -45,6 +45,10 @@ export class GameScene extends Phaser.Scene {
         frameWidth: 16,
         frameHeight: 16,
       });
+      this.load.spritesheet(`${char.spriteKey}_combat`, `/characters/${char.spriteKey}_combat.png`, {
+        frameWidth: 16,
+        frameHeight: 16,
+      });
     }
   }
 
@@ -265,28 +269,32 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createCharacterAnimations(): void {
-    const animDefs = [
-      { suffix: 'idle_right',    row: 0,  fps: 6,  repeat: -1 },
-      { suffix: 'idle_left',     row: 1,  fps: 6,  repeat: -1 },
-      { suffix: 'idle_down',     row: 2,  fps: 6,  repeat: -1 },
-      { suffix: 'idle_up',       row: 3,  fps: 6,  repeat: -1 },
-      { suffix: 'run_right',     row: 4,  fps: 8,  repeat: -1 },
-      { suffix: 'run_left',      row: 5,  fps: 8,  repeat: -1 },
-      { suffix: 'run_down',      row: 6,  fps: 8,  repeat: -1 },
-      { suffix: 'run_up',        row: 7,  fps: 8,  repeat: -1 },
-      { suffix: 'sprint_right',  row: 8,  fps: 12, repeat: -1 },
-      { suffix: 'sprint_left',   row: 9,  fps: 12, repeat: -1 },
-      { suffix: 'sprint_down',   row: 10, fps: 12, repeat: -1 },
-      { suffix: 'sprint_up',     row: 11, fps: 12, repeat: -1 },
-      // Attack animations — play once (repeat: 0)
-      { suffix: 'attack_right',  row: 12, fps: 12, repeat: 0 },
-      { suffix: 'attack_left',   row: 13, fps: 12, repeat: 0 },
-      { suffix: 'attack_down',   row: 14, fps: 12, repeat: 0 },
-      { suffix: 'attack_up',     row: 15, fps: 12, repeat: 0 },
+    // Regular movement animations — non-combat sheet (4 frames per row)
+    const moveDefs = [
+      { suffix: 'idle_right',   row: 0,  fps: 6,  repeat: -1 },
+      { suffix: 'idle_left',    row: 1,  fps: 6,  repeat: -1 },
+      { suffix: 'idle_down',    row: 2,  fps: 6,  repeat: -1 },
+      { suffix: 'idle_up',      row: 3,  fps: 6,  repeat: -1 },
+      { suffix: 'run_right',    row: 4,  fps: 8,  repeat: -1 },
+      { suffix: 'run_left',     row: 5,  fps: 8,  repeat: -1 },
+      { suffix: 'run_down',     row: 6,  fps: 8,  repeat: -1 },
+      { suffix: 'run_up',       row: 7,  fps: 8,  repeat: -1 },
+      { suffix: 'sprint_right', row: 8,  fps: 12, repeat: -1 },
+      { suffix: 'sprint_left',  row: 9,  fps: 12, repeat: -1 },
+      { suffix: 'sprint_down',  row: 10, fps: 12, repeat: -1 },
+      { suffix: 'sprint_up',    row: 11, fps: 12, repeat: -1 },
+    ];
+
+    // Attack animations — combat sheet (8 frames per row, rows 0-3 = right/left/down/up)
+    const attackDefs = [
+      { suffix: 'attack_right', row: 0, fps: 12, repeat: 0 },
+      { suffix: 'attack_left',  row: 1, fps: 12, repeat: 0 },
+      { suffix: 'attack_down',  row: 2, fps: 12, repeat: 0 },
+      { suffix: 'attack_up',    row: 3, fps: 12, repeat: 0 },
     ];
 
     for (const char of CHARACTERS) {
-      for (const def of animDefs) {
+      for (const def of moveDefs) {
         const key = `${char.spriteKey}_${def.suffix}`;
         if (this.anims.exists(key)) continue;
         this.anims.create({
@@ -294,6 +302,20 @@ export class GameScene extends Phaser.Scene {
           frames: this.anims.generateFrameNumbers(char.spriteKey, {
             start: def.row * 4,
             end:   def.row * 4 + 3,
+          }),
+          frameRate: def.fps,
+          repeat: def.repeat,
+        });
+      }
+
+      for (const def of attackDefs) {
+        const key = `${char.spriteKey}_${def.suffix}`;
+        if (this.anims.exists(key)) continue;
+        this.anims.create({
+          key,
+          frames: this.anims.generateFrameNumbers(`${char.spriteKey}_combat`, {
+            start: def.row * 8,
+            end:   def.row * 8 + 7,
           }),
           frameRate: def.fps,
           repeat: def.repeat,
