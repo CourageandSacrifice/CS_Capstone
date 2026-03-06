@@ -1,4 +1,5 @@
 import { CHARACTERS, ClassData } from './data/Classes';
+import { joinRoom } from './network/Network';
 
 const USERNAME_KEY = 'cc_username';
 const CHARACTER_KEY = 'cc_character';
@@ -233,6 +234,11 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void): void {
     publicBtn.classList.remove('active');
   });
 
+  // ── Join status feedback ──
+  const joinStatus = document.createElement('span');
+  joinStatus.style.cssText = 'font-size:12px;font-weight:bold;letter-spacing:1px;min-width:130px;text-align:left;';
+  joinOptions.appendChild(joinStatus);
+
   // ── Join: random / enter code ──
   randomBtn.addEventListener('click', () => {
     roomCode = '';
@@ -240,6 +246,7 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void): void {
     codeBtn.classList.remove('active');
     roomCodeInput.classList.add('hidden');
     roomCodeInput.value = '';
+    joinStatus.textContent = '';
   });
 
   codeBtn.addEventListener('click', () => {
@@ -252,10 +259,11 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void): void {
   roomCodeInput.addEventListener('input', () => {
     roomCodeInput.value = roomCodeInput.value.toUpperCase();
     roomCode = roomCodeInput.value.trim();
+    joinStatus.textContent = '';
   });
 
   // ── Play ──
-  playBtn.addEventListener('click', () => {
+  playBtn.addEventListener('click', async () => {
     if (mode === 'join' && codeBtn.classList.contains('active') && !roomCode) {
       roomCodeInput.classList.add('shake');
       setTimeout(() => roomCodeInput.classList.remove('shake'), 400);
@@ -263,9 +271,29 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void): void {
       return;
     }
 
+    if (mode === 'join' && codeBtn.classList.contains('active') && roomCode) {
+      playBtn.disabled = true;
+      joinStatus.textContent = 'Connecting...';
+      joinStatus.style.color = '#f5c518';
+      try {
+        await joinRoom(roomCode, username, classData.spriteKey);
+        joinStatus.textContent = 'Lobby Found';
+        joinStatus.style.color = '#2ecc71';
+        await new Promise<void>(r => setTimeout(r, 1000));
+        screen.classList.add('hidden');
+        document.getElementById('game-container')!.style.display = 'flex';
+        resolve({ username, mode, isPrivate, roomCode, classData });
+      } catch {
+        joinStatus.textContent = 'Lobby Not Found';
+        joinStatus.style.color = '#e63946';
+        playBtn.disabled = false;
+        setTimeout(() => { joinStatus.textContent = ''; }, 3000);
+      }
+      return;
+    }
+
     screen.classList.add('hidden');
-    const container = document.getElementById('game-container')!;
-    container.style.display = 'flex';
+    document.getElementById('game-container')!.style.display = 'flex';
     resolve({ username, mode, isPrivate, roomCode, classData });
   });
 }
