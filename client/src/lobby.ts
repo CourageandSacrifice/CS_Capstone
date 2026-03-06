@@ -250,6 +250,7 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void): void {
   });
 
   roomCodeInput.addEventListener('input', () => {
+    roomCodeInput.value = roomCodeInput.value.toUpperCase();
     roomCode = roomCodeInput.value.trim();
   });
 
