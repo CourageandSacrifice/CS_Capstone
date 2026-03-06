@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { ClassData, CHARACTERS } from '../data/Classes';
 import type { GameScene } from './GameScene';
-import { createRoom, joinAnyRoom, joinRoom, reconnect, hasReconnectionToken, clearReconnectionData, leaveRoom } from '../network/Network';
+import { createRoom, joinAnyRoom, joinRoom, reconnect, hasReconnectionToken, clearReconnectionData, leaveRoom, getRoom } from '../network/Network';
 import { MAP_W, MAP_H, TILE_SIZE, BUILDINGS } from '../map/CampusMap';
 
 export class HUDScene extends Phaser.Scene {
@@ -198,6 +198,15 @@ export class HUDScene extends Phaser.Scene {
   }
 
   private async handleConnect(mode: 'host' | 'join'): Promise<void> {
+    // If lobby already validated and joined the room (e.g. join-by-code), reuse it
+    const existing = getRoom();
+    if (existing) {
+      this.isHost = mode === 'host';
+      this.onConnected(existing.roomId);
+      this.gameScene.onRoomConnected(existing);
+      return;
+    }
+
     const username = this.registry.get('username') as string ?? 'Player';
     const isPrivate = this.registry.get('isPrivate') as boolean ?? false;
     const roomCode = this.registry.get('roomCode') as string ?? '';
