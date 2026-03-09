@@ -104,12 +104,8 @@ export function sendStartGame(): void {
   room.send('startGame');
 }
 
-export async function leaveRoom(): Promise<void> {
+export function leaveRoom(): void {
   if (!room) return;
   clearReconnectionData();
-  try {
-    await room.leave(true);
-  } catch {
-    // Socket may already be closed (e.g. server kicked with 4002) — that's fine
-  }
+  try { room.leave(true); } catch {} // fire-and-forget; don't await (hangs when socket already closed)
 }
