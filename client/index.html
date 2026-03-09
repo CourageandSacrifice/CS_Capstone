@@ -5,85 +5,101 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Campus Clash</title>
   <link rel="icon" type="image/png" href="/favicon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 </head>
 <body>
 
   <!-- ── LOGIN SCREEN ── -->
   <div id="login-screen" class="hidden">
     <div class="login-card">
-      <div class="login-logo">CAMPUS CLASH</div>
-      <p class="login-sub">Enter your name to continue</p>
+      <div class="login-logo">CAMPUS<br>CLASH</div>
+      <p class="login-sub">ENTER YOUR NAME</p>
       <input id="username-input" type="text" maxlength="16"
-             placeholder="Username" autocomplete="off" spellcheck="false" />
-      <button id="login-btn">ENTER</button>
+             placeholder="USERNAME" autocomplete="off" spellcheck="false" />
+      <button id="login-btn">START</button>
     </div>
   </div>
 
   <!-- ── LOBBY SCREEN ── -->
   <div id="lobby-screen" class="hidden">
 
+    <!-- Hidden avatar element — required by lobby.ts -->
+    <div id="lobby-avatar" aria-hidden="true" style="display:none">CC</div>
+
+    <!-- Header: nav tabs only -->
     <header class="lobby-header">
-      <div class="lobby-logo">CAMPUS CLASH</div>
       <nav class="lobby-nav">
         <button class="nav-tab active" id="nav-lobby">LOBBY</button>
         <button class="nav-tab" id="nav-locker">LOCKER</button>
         <button class="nav-tab nav-disabled">
-          LEADERBOARD <span class="soon-tag">COMING SOON</span>
+          LEADERBOARD <span class="soon-tag">SOON</span>
         </button>
       </nav>
     </header>
 
     <div class="lobby-body">
 
-      <aside class="lobby-sidebar">
-        <div class="player-card">
-          <div class="player-avatar" id="lobby-avatar">CC</div>
-          <div class="player-name" id="lobby-username">Player</div>
-        </div>
-        <div class="sidebar-section">
-          <div class="sidebar-label">STATUS</div>
-          <div class="sidebar-value online">● ONLINE</div>
-        </div>
-      </aside>
+      <!-- ── Main view: left panel + right character ── -->
+      <div id="lobby-stage" class="lobby-main-view">
 
-      <main class="lobby-stage" id="lobby-stage">
-        <div class="character-showcase">
-          <canvas id="char-preview" width="256" height="256"></canvas>
+        <!-- Left: retro control panel -->
+        <div class="lobby-control-panel">
+
+          <div class="panel-title">CAMPUS<br>CLASH</div>
+          <div class="panel-divider"></div>
+
+          <div class="mode-selector">
+            <button class="mode-btn active" id="host-btn">HOST</button>
+            <button class="mode-btn" id="join-btn">JOIN</button>
+          </div>
+
+          <!-- HOST sub-options -->
+          <div id="host-options" class="sub-options">
+            <button class="sub-btn active" id="public-btn">PUBLIC</button>
+            <button class="sub-btn" id="private-btn">PRIVATE</button>
+            <span class="max-players-label">MAX:</span>
+            <div class="player-count-selector">
+              <button class="player-count-btn" id="mp-5">5</button>
+              <button class="player-count-btn active" id="mp-10">10</button>
+              <button class="player-count-btn" id="mp-20">20</button>
+              <button class="player-count-btn" id="mp-30">30</button>
+            </div>
+          </div>
+
+          <!-- JOIN sub-options -->
+          <div id="join-options" class="sub-options hidden">
+            <button class="sub-btn active" id="random-btn">RANDOM</button>
+            <button class="sub-btn" id="code-btn">CODE</button>
+            <input id="room-code-input" type="text" maxlength="12"
+                   placeholder="ROOM CODE" autocomplete="off" spellcheck="false" class="hidden" />
+          </div>
+
+          <button class="play-btn" id="play-btn">&#9658;&nbsp;PLAY</button>
+
+        </div>
+
+        <!-- Right: character showcase -->
+        <div class="char-showcase-right">
+          <div class="char-username" id="lobby-username">PLAYER</div>
           <div class="char-label" id="char-name-label">SELECT CHARACTER</div>
-          <div class="stage-disc"></div>
+          <div class="char-canvas-wrap">
+            <canvas id="char-preview" width="1024" height="1024"></canvas>
+          </div>
+          <div class="char-platform"></div>
         </div>
-      </main>
 
+      </div>
+
+      <!-- ── Locker panel ── -->
       <div id="locker-panel" class="hidden"></div>
 
     </div>
 
-    <footer class="lobby-footer">
-      <div class="mode-selector">
-        <button class="mode-btn active" id="host-btn">HOST</button>
-        <button class="mode-btn" id="join-btn">JOIN</button>
-      </div>
-
-      <!-- HOST sub-options -->
-      <div id="host-options" class="sub-options">
-        <button class="sub-btn active" id="public-btn">PUBLIC</button>
-        <button class="sub-btn" id="private-btn">PRIVATE</button>
-      </div>
-
-      <!-- JOIN sub-options -->
-      <div id="join-options" class="sub-options hidden">
-        <button class="sub-btn active" id="random-btn">RANDOM</button>
-        <button class="sub-btn" id="code-btn">ENTER CODE</button>
-        <input id="room-code-input" type="text" maxlength="12"
-               placeholder="ROOM CODE" autocomplete="off" spellcheck="false" class="hidden" />
-      </div>
-
-      <button class="play-btn" id="play-btn">▶&nbsp; PLAY</button>
-    </footer>
-
   </div>
 
-  <!-- ── GAME (hidden until PLAY) ── -->
+  <!-- ── GAME ── -->
   <div id="game-container"></div>
 
   <script type="module" src="/src/main.ts"></script>

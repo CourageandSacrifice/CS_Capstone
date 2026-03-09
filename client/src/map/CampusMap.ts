@@ -147,7 +147,17 @@ function generateMap(): number[][] {
 
 export const MAP_DATA: number[][] = generateMap();
 
+let _gamePhase: 'waiting' | 'playing' = 'waiting';
+
+export function setGamePhase(p: 'waiting' | 'playing'): void {
+  _gamePhase = p;
+}
+
 export function isWalkable(tileX: number, tileY: number): boolean {
+  if (_gamePhase === 'waiting') {
+    // 30×30 waiting room — interior tiles only (1..28)
+    return tileX > 0 && tileX < 29 && tileY > 0 && tileY < 29;
+  }
   if (tileX < 0 || tileX >= MAP_W || tileY < 0 || tileY >= MAP_H) {
     return false;
   }

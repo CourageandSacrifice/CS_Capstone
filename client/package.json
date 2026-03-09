@@ -12,7 +12,7 @@
   "dependencies": {
     "@colyseus/sdk": "^0.17.31",
     "phaser": "^3.90.0",
-    "vercel": "^50.22.1"
+    "vercel": "^50.26.1"
   },
   "devDependencies": {
     "typescript": "^5.7.0",

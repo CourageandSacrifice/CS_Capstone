@@ -40,9 +40,9 @@ export async function autoJoin(name: string, spriteKey = 'archer'): Promise<Room
   return setupRoom(r);
 }
 
-export async function createRoom(name: string, isPrivate = false, spriteKey = 'archer'): Promise<Room> {
+export async function createRoom(name: string, isPrivate = false, spriteKey = 'archer', maxPlayers = 10): Promise<Room> {
   const c = initClient();
-  const r = await c.create('my_room', { name, isPrivate, spriteKey });
+  const r = await c.create('my_room', { name, isPrivate, spriteKey, maxPlayers });
   return setupRoom(r);
 }
 
@@ -97,6 +97,11 @@ export function sendAttack(targetId: string, dirX: number, dirY: number): void {
 export function sendEndGame(): void {
   if (!room) return;
   room.send('endGame');
+}
+
+export function sendStartGame(): void {
+  if (!room) return;
+  room.send('startGame');
 }
 
 export async function leaveRoom(): Promise<void> {

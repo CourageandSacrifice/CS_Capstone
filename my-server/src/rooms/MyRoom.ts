@@ -34,8 +34,17 @@ const RESPAWN_DELAY = 5000;
 
 const PLAYER_COLORS = [0x3498db, 0xe74c3c, 0x2ecc71, 0xf39c12];
 
+const VALID_MAX_PLAYERS = [5, 10, 20, 30];
+const WAITING_ROOM_SIZE = 30; // 30×30 tile waiting room
+const WAITING_TILE_SIZE = 16;
+
+function waitingSpawn(): { x: number; y: number } {
+  const tx = 4 + Math.floor(Math.random() * 22); // tiles 4..25
+  const ty = 4 + Math.floor(Math.random() * 22);
+  return { x: tx * WAITING_TILE_SIZE + 8, y: ty * WAITING_TILE_SIZE + 8 };
+}
+
 export class MyRoom extends Room {
-  maxClients = 4;
   state = new MyRoomState();
   private playerIndex = 0;
   private lastAttackTime = new Map<string, number>();
@@ -57,6 +66,7 @@ export class MyRoom extends Room {
     },
 
     attack: (client: Client, message: { targetId: string; dirX?: number; dirY?: number }) => {
+      if (this.state.phase !== "playing") return;
       const attacker = this.state.players.get(client.sessionId);
       if (!attacker || !attacker.alive) return;
 
@@ -126,6 +136,22 @@ export class MyRoom extends Room {
         this.disconnect();
       }, 5000);
     },
+
+    startGame: (client: Client) => {
+      if (client.sessionId !== this.hostId) return;
+      if (this.state.phase !== "waiting") return;
+      this.state.phase = "playing";
+      this.lock(); // block new joins
+      let i = 0;
+      this.state.players.forEach((player) => {
+        const spawn = SPAWN_POINTS[i++ % SPAWN_POINTS.length];
+        player.x = spawn.x;
+        player.y = spawn.y;
+        player.hp = player.maxHp;
+        player.alive = true;
+      });
+      console.log(`Room ${this.roomId}: game started with ${this.state.players.size} players`);
+    },
   }
 
   async onCreate (options: any) {
@@ -133,12 +159,18 @@ export class MyRoom extends Room {
     if (options?.isPrivate === true) {
       await this.setPrivate(true);
     }
-    console.log(`Room created! ID: ${this.roomId}`, options?.isPrivate ? "(private)" : "(public)");
+    const requestedMax = Number(options?.maxPlayers);
+    const validated = VALID_MAX_PLAYERS.includes(requestedMax) ? requestedMax : 10;
+    this.maxClients = validated;
+    this.state.maxPlayers = validated;
+    console.log(`Room created! ID: ${this.roomId}`, options?.isPrivate ? "(private)" : "(public)", `maxPlayers=${validated}`);
   }
 
   onJoin (client: Client, options: any) {
     if (!this.hostId) this.hostId = client.sessionId;
-    const spawn = SPAWN_POINTS[this.playerIndex % SPAWN_POINTS.length];
+    const spawn = this.state.phase === "waiting"
+      ? waitingSpawn()
+      : SPAWN_POINTS[this.playerIndex % SPAWN_POINTS.length];
     const color = PLAYER_COLORS[this.playerIndex % PLAYER_COLORS.length];
     this.playerIndex++;
 

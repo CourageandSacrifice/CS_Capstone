@@ -239,7 +239,11 @@ export class Player {
     remotePlayers: Map<string, { sprite: Phaser.GameObjects.Container; alive: boolean }>,
     sendAttackFn: (id: string, dirX: number, dirY: number) => void,
   ): void {
-    // Always play attack animation on every keypress
+    // Only attack (animation + damage) when the cooldown has elapsed
+    if (time - this.lastAttackTime < this.attackRate) return;
+    this.lastAttackTime = time;
+
+    // Play attack animation
     const dir = this.getDirection();
     const animKey = `${this.classData.spriteKey}_attack_${dir}`;
     this.isAttacking = true;
@@ -248,16 +252,12 @@ export class Player {
     if (this.classData.flipForLeft) this.body.setFlipX(this.facingX < 0);
     else if (this.classData.flipForRight) this.body.setFlipX(this.facingX > 0);
     this.body.play(animKey);
-    // When the animation finishes, return to idle/run
     this.body.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
       this.isAttacking = false;
       this.currentAnim = '';
     });
 
-    // Damage is rate-limited
-    if (time - this.lastAttackTime < this.attackRate) return;
-    this.lastAttackTime = time;
-
+    // Hit detection
     remotePlayers.forEach((rp, id) => {
       if (!rp.alive) return;
       const dist = Phaser.Math.Distance.Between(

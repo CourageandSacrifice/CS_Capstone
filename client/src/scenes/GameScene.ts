@@ -6,6 +6,7 @@ import {
   TILE,
   MAP_W,
   MAP_H,
+  setGamePhase,
 } from '../map/CampusMap';
 import { ClassData, DEFAULT_CLASS, CHARACTERS } from '../data/Classes';
 import { Player } from '../entities/Player';
@@ -34,6 +35,8 @@ export class GameScene extends Phaser.Scene {
 
   private eliminatedText?: Phaser.GameObjects.Text;
   private eliminatedOverlay?: Phaser.GameObjects.Graphics;
+  private mapLayer?: Phaser.GameObjects.Graphics;
+  private gamePhase: 'waiting' | 'playing' = 'waiting';
 
   constructor() {
     super('GameScene');
@@ -68,21 +71,21 @@ export class GameScene extends Phaser.Scene {
   }
 
   create(): void {
-    const worldW = MAP_W * TILE_SIZE;
-    const worldH = MAP_H * TILE_SIZE;
-
-    this.drawMap();
-    this.drawBuildingLabels();
     this.createCharacterAnimations();
 
-    // Spawn on the left spine path near Craton
-    const spawnX = 30 * TILE_SIZE + TILE_SIZE / 2;
-    const spawnY = 36 * TILE_SIZE + TILE_SIZE / 2;
+    // Start in waiting room (30×30 tiles)
+    const waitW = 30 * TILE_SIZE;
+    const waitH = 30 * TILE_SIZE;
+    this.drawWaitingRoom();
+
+    // Spawn at center of waiting room; server will update position on first state sync
+    const spawnX = waitW / 2;
+    const spawnY = waitH / 2;
     this.player = new Player(this, spawnX, spawnY, this.classData);
 
-    // Camera — zoom so exactly 40 tiles fit across the 1280px canvas
-    this.cameras.main.setZoom(this.cameras.main.width / (40 * TILE_SIZE));
-    this.cameras.main.setBounds(0, 0, worldW, worldH);
+    // Camera — zoom to show ~20 tiles across
+    this.cameras.main.setZoom(this.cameras.main.width / (20 * TILE_SIZE));
+    this.cameras.main.setBounds(0, 0, waitW, waitH);
     this.cameras.main.startFollow(this.player.sprite, true, 0.1, 0.1);
     this.cameras.main.setBackgroundColor('#1a1a2e');
 
@@ -114,6 +117,59 @@ export class GameScene extends Phaser.Scene {
     room.onStateChange.once((state: any) => {
       this.setupMultiplayer(room, state);
     });
+  }
+
+  private drawWaitingRoom(): void {
+    if (this.mapLayer) { this.mapLayer.destroy(); this.mapLayer = undefined; }
+    const g = this.add.graphics();
+    const size = 30;
+
+    // Interior — walkable ground
+    g.fillStyle(0x4a5568, 1);
+    g.fillRect(TILE_SIZE, TILE_SIZE, (size - 2) * TILE_SIZE, (size - 2) * TILE_SIZE);
+
+    // Walls (border)
+    g.fillStyle(0x2d3748, 1);
+    for (let i = 0; i < size; i++) {
+      g.fillRect(0, i * TILE_SIZE, TILE_SIZE, TILE_SIZE);                           // left
+      g.fillRect((size - 1) * TILE_SIZE, i * TILE_SIZE, TILE_SIZE, TILE_SIZE);     // right
+      g.fillRect(i * TILE_SIZE, 0, TILE_SIZE, TILE_SIZE);                           // top
+      g.fillRect(i * TILE_SIZE, (size - 1) * TILE_SIZE, TILE_SIZE, TILE_SIZE);     // bottom
+    }
+
+    // Subtle grid
+    g.lineStyle(1, 0x000000, 0.08);
+    for (let y = 0; y <= size; y++) g.lineBetween(0, y * TILE_SIZE, size * TILE_SIZE, y * TILE_SIZE);
+    for (let x = 0; x <= size; x++) g.lineBetween(x * TILE_SIZE, 0, x * TILE_SIZE, size * TILE_SIZE);
+
+    g.setDepth(0);
+    this.mapLayer = g;
+    setGamePhase('waiting');
+  }
+
+  startFullGame(): void {
+    setGamePhase('playing');
+    this.gamePhase = 'playing';
+
+    if (this.mapLayer) { this.mapLayer.destroy(); this.mapLayer = undefined; }
+    this.drawMap();
+    this.drawBuildingLabels();
+
+    const worldW = MAP_W * TILE_SIZE;
+    const worldH = MAP_H * TILE_SIZE;
+    this.cameras.main.setBounds(0, 0, worldW, worldH);
+    this.cameras.main.setZoom(this.cameras.main.width / (40 * TILE_SIZE));
+
+    // Sync local player to server-assigned spawn position
+    if (this.room) {
+      const myState = (this.room.state as any).players.get(this.room.sessionId);
+      if (myState) {
+        this.player.sprite.x = myState.x;
+        this.player.sprite.y = myState.y;
+      }
+    }
+
+    this.events.emit('gameStarted');
   }
 
   private setupMultiplayer(room: Room, state: any): void {
@@ -212,6 +268,10 @@ export class GameScene extends Phaser.Scene {
         remote.destroy();
         this.remotePlayers.delete(sessionId);
       }
+    });
+
+    $(state).listen('phase', (value: string) => {
+      if (value === 'playing') this.startFullGame();
     });
 
     $(state).listen('gameOver', () => {
@@ -420,7 +480,7 @@ export class GameScene extends Phaser.Scene {
     if (Phaser.Input.Keyboard.JustDown(this.spaceKey)) {
       this.player.dash(time);
     }
-    if (Phaser.Input.Keyboard.JustDown(this.attackKey)) {
+    if (this.gamePhase === 'playing' && Phaser.Input.Keyboard.JustDown(this.attackKey)) {
       this.player.tryAttack(time, this.remotePlayers, sendAttack);
     }
 

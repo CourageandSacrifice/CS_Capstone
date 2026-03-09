@@ -15,4 +15,6 @@ export class PlayerState extends Schema {
 export class MyRoomState extends Schema {
   @type({ map: PlayerState }) players = new MapSchema<PlayerState>();
   @type("boolean") gameOver: boolean = false;
+  @type("string") phase: string = "waiting";
+  @type("number") maxPlayers: number = 10;
 }

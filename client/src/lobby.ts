@@ -1,5 +1,7 @@
 import { CHARACTERS, ClassData } from './data/Classes';
-import { joinRoom } from './network/Network';
+import { createRoom, joinAnyRoom, joinRoom } from './network/Network';
+
+const delay = (ms: number): Promise<void> => new Promise(r => setTimeout(r, ms));
 
 const USERNAME_KEY = 'cc_username';
 const CHARACTER_KEY = 'cc_character';
@@ -39,6 +41,8 @@ function showLogin(resolve: (r: LobbyResult) => void): void {
     }
     localStorage.setItem(USERNAME_KEY, name);
     screen.classList.add('hidden');
+    const lobbyScreen = document.getElementById('lobby-screen')!;
+    lobbyScreen.classList.add('fade-in');
     showLobby(name, resolve);
   };
 
@@ -87,8 +91,8 @@ function buildLockerGrid(
     card.dataset.key = char.spriteKey;
 
     const canvas = document.createElement('canvas');
-    canvas.width = 64;
-    canvas.height = 64;
+    canvas.width = 192;
+    canvas.height = 192;
 
     const img = new Image();
     img.onload = () => {
@@ -178,11 +182,12 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void): void {
   let mode: 'host' | 'join' = 'host';
   let isPrivate = false;
   let roomCode = '';
+  let maxPlayers = 10;
 
   // Mode buttons
   const hostBtn = document.getElementById('host-btn')!;
   const joinBtn = document.getElementById('join-btn')!;
-  const playBtn = document.getElementById('play-btn')!;
+  const playBtn = document.getElementById('play-btn') as HTMLButtonElement;
 
   // Sub-option panels
   const hostOptions = document.getElementById('host-options')!;
@@ -234,6 +239,16 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void): void {
     publicBtn.classList.remove('active');
   });
 
+  // ── Host: max players selector ──
+  const mpBtns = [5, 10, 20, 30].map(n => document.getElementById(`mp-${n}`)!);
+  mpBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      maxPlayers = Number(btn.id.replace('mp-', ''));
+      mpBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+
   // ── Join status feedback ──
   const joinStatus = document.createElement('span');
   joinStatus.style.cssText = 'font-size:12px;font-weight:bold;letter-spacing:1px;min-width:130px;text-align:left;';
@@ -271,29 +286,63 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void): void {
       return;
     }
 
-    if (mode === 'join' && codeBtn.classList.contains('active') && roomCode) {
-      playBtn.disabled = true;
-      joinStatus.textContent = 'Connecting...';
-      joinStatus.style.color = '#f5c518';
+    const originalText = playBtn.textContent ?? '▶  PLAY';
+    playBtn.disabled = true;
+    playBtn.textContent = '...Searching';
+    playBtn.style.color = '';
+
+    const launchGame = async () => {
+      playBtn.textContent = 'Game Found';
+      playBtn.style.color = '#2ecc71';
+      await delay(1000);
+      screen.classList.add('hidden');
+      document.getElementById('game-container')!.style.display = 'flex';
+    };
+
+    const resetBtn = () => {
+      playBtn.disabled = false;
+      playBtn.textContent = originalText;
+      playBtn.style.color = '';
+    };
+
+    if (mode === 'host') {
       try {
-        await joinRoom(roomCode, username, classData.spriteKey);
-        joinStatus.textContent = 'Lobby Found';
-        joinStatus.style.color = '#2ecc71';
-        await new Promise<void>(r => setTimeout(r, 1000));
-        screen.classList.add('hidden');
-        document.getElementById('game-container')!.style.display = 'flex';
+        await createRoom(username, isPrivate, classData.spriteKey, maxPlayers);
+        await launchGame();
         resolve({ username, mode, isPrivate, roomCode, classData });
       } catch {
-        joinStatus.textContent = 'Lobby Not Found';
-        joinStatus.style.color = '#e63946';
-        playBtn.disabled = false;
-        setTimeout(() => { joinStatus.textContent = ''; }, 3000);
+        resetBtn();
       }
       return;
     }
 
-    screen.classList.add('hidden');
-    document.getElementById('game-container')!.style.display = 'flex';
-    resolve({ username, mode, isPrivate, roomCode, classData });
+    if (mode === 'join' && randomBtn.classList.contains('active')) {
+      try {
+        await joinAnyRoom(username, classData.spriteKey);
+        await launchGame();
+        resolve({ username, mode, isPrivate, roomCode, classData });
+      } catch {
+        joinStatus.textContent = 'No Rooms Available';
+        joinStatus.style.color = '#e63946';
+        setTimeout(() => { joinStatus.textContent = ''; }, 3000);
+        resetBtn();
+      }
+      return;
+    }
+
+    // Join by code
+    joinStatus.textContent = '';
+    try {
+      await joinRoom(roomCode, username, classData.spriteKey);
+      joinStatus.textContent = 'Game Found';
+      joinStatus.style.color = '#2ecc71';
+      await launchGame();
+      resolve({ username, mode, isPrivate, roomCode, classData });
+    } catch {
+      joinStatus.textContent = 'Lobby Not Found';
+      joinStatus.style.color = '#e63946';
+      setTimeout(() => { joinStatus.textContent = ''; }, 3000);
+      resetBtn();
+    }
   });
 }

@@ -1,17 +1,23 @@
 import Phaser from 'phaser';
 import { ClassData, CHARACTERS } from '../data/Classes';
 import type { GameScene } from './GameScene';
-import { createRoom, joinAnyRoom, joinRoom, reconnect, hasReconnectionToken, clearReconnectionData, leaveRoom, getRoom } from '../network/Network';
+import { joinRoom, reconnect, hasReconnectionToken, clearReconnectionData, leaveRoom, getRoom, sendStartGame } from '../network/Network';
 import { MAP_W, MAP_H, TILE_SIZE, BUILDINGS } from '../map/CampusMap';
 
 export class HUDScene extends Phaser.Scene {
   private classData!: ClassData;
   private gameScene!: GameScene;
   private hpBarFill!: Phaser.GameObjects.Graphics;
+  private hpBg!: Phaser.GameObjects.Graphics;
   private hpText!: Phaser.GameObjects.Text;
   private dashText!: Phaser.GameObjects.Text;
   private killText!: Phaser.GameObjects.Text;
+  private killLabel!: Phaser.GameObjects.Text;
   private roomCodeText!: Phaser.GameObjects.Text;
+  private classInfoText!: Phaser.GameObjects.Text;
+  private controlsText!: Phaser.GameObjects.Text;
+  private mmContainer!: Phaser.GameObjects.Container;
+  private lobbyBtn!: Phaser.GameObjects.Container;
 
   private hpBarW = 420;
   private hpBarH = 34;
@@ -20,6 +26,13 @@ export class HUDScene extends Phaser.Scene {
 
   private isHost = false;
   private endGameBtn?: Phaser.GameObjects.Container;
+  private gamePhase: 'waiting' | 'playing' = 'waiting';
+
+  // Waiting room UI
+  private waitingTitle!: Phaser.GameObjects.Text;
+  private waitingCountText!: Phaser.GameObjects.Text;
+  private waitingStatusText!: Phaser.GameObjects.Text;
+  private startGameBtn?: Phaser.GameObjects.Container;
 
   private readonly MINIMAP_W = 160;
   private readonly MINIMAP_H = 120;
@@ -41,7 +54,7 @@ export class HUDScene extends Phaser.Scene {
 
     this.hpBarX = Math.floor((width - this.hpBarW) / 2);
 
-    // Title
+    // Title — always visible
     this.add.text(width / 2, 16, 'CAMPUS CLASH', {
       fontFamily: 'Courier New, monospace',
       fontSize: '32px',
@@ -51,15 +64,17 @@ export class HUDScene extends Phaser.Scene {
       strokeThickness: 6,
     }).setOrigin(0.5);
 
-    // HP bar background
-    const hpBg = this.add.graphics();
-    hpBg.fillStyle(0x333333, 1);
-    hpBg.fillRoundedRect(this.hpBarX, this.hpBarY, this.hpBarW, this.hpBarH, 4);
-    hpBg.lineStyle(2, 0x000000, 1);
-    hpBg.strokeRoundedRect(this.hpBarX, this.hpBarY, this.hpBarW, this.hpBarH, 4);
+    // HP bar background (hidden until game starts)
+    this.hpBg = this.add.graphics();
+    this.hpBg.fillStyle(0x333333, 1);
+    this.hpBg.fillRoundedRect(this.hpBarX, this.hpBarY, this.hpBarW, this.hpBarH, 4);
+    this.hpBg.lineStyle(2, 0x000000, 1);
+    this.hpBg.strokeRoundedRect(this.hpBarX, this.hpBarY, this.hpBarW, this.hpBarH, 4);
+    this.hpBg.setVisible(false);
 
     // HP bar fill
     this.hpBarFill = this.add.graphics();
+    this.hpBarFill.setVisible(false);
     this.drawHpBar(1);
 
     // HP text
@@ -75,17 +90,17 @@ export class HUDScene extends Phaser.Scene {
         stroke: '#000000',
         strokeThickness: 4,
       },
-    ).setOrigin(0.5);
+    ).setOrigin(0.5).setVisible(false);
 
     // Class name + weapon
-    this.add.text(width / 2, this.hpBarY + this.hpBarH + 12,
+    this.classInfoText = this.add.text(width / 2, this.hpBarY + this.hpBarH + 12,
       `${this.classData.name} - ${this.classData.weaponName}`, {
         fontFamily: 'Courier New, monospace',
         fontSize: '18px',
         color: '#f1faee',
         stroke: '#000000',
         strokeThickness: 3,
-      }).setOrigin(0.5);
+      }).setOrigin(0.5).setVisible(false);
 
     // Dash status
     this.dashText = this.add.text(width / 2, this.hpBarY + this.hpBarH + 38, 'DASH: ●●●', {
@@ -94,25 +109,25 @@ export class HUDScene extends Phaser.Scene {
       color: '#2a9d8f',
       stroke: '#000000',
       strokeThickness: 3,
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setVisible(false);
 
     // Controls legend
-    this.add.text(width / 2, height - 28, 'WASD: Move  |  O: Attack  |  SPACE: Dash', {
+    this.controlsText = this.add.text(width / 2, height - 28, 'WASD: Move  |  O: Attack  |  SPACE: Dash', {
       fontFamily: 'Courier New, monospace',
       fontSize: '18px',
       color: '#a8dadc',
       stroke: '#000000',
       strokeThickness: 4,
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setVisible(false);
 
     // Kill counter
-    this.add.text(16, 16, 'KILLS', {
+    this.killLabel = this.add.text(16, 16, 'KILLS', {
       fontFamily: 'Courier New, monospace',
       fontSize: '16px',
       color: '#a8dadc',
       stroke: '#000000',
       strokeThickness: 3,
-    });
+    }).setVisible(false);
     this.killText = this.add.text(16, 38, '0', {
       fontFamily: 'Courier New, monospace',
       fontSize: '48px',
@@ -120,9 +135,9 @@ export class HUDScene extends Phaser.Scene {
       fontStyle: 'bold',
       stroke: '#000000',
       strokeThickness: 6,
-    });
+    }).setVisible(false);
 
-    // Room status (bottom left)
+    // Room status (bottom left) — visible during both phases
     this.roomCodeText = this.add.text(16, height - 56, '', {
       fontFamily: 'Courier New, monospace',
       fontSize: '16px',
@@ -131,12 +146,11 @@ export class HUDScene extends Phaser.Scene {
       strokeThickness: 3,
     });
 
-    // Minimap (top right)
+    // Minimap container (hidden until game starts)
     this.minimapX = width - this.MINIMAP_W - 10;
     const mmBg = this.add.graphics();
     mmBg.fillStyle(0x000000, 0.6);
     mmBg.fillRect(this.minimapX, this.MINIMAP_Y, this.MINIMAP_W, this.MINIMAP_H);
-    // Buildings on minimap
     for (const b of BUILDINGS) {
       const bx = this.minimapX + (b.x / MAP_W) * this.MINIMAP_W;
       const by = this.MINIMAP_Y + (b.y / MAP_H) * this.MINIMAP_H;
@@ -145,21 +159,48 @@ export class HUDScene extends Phaser.Scene {
       mmBg.fillStyle(b.color, 0.85);
       mmBg.fillRect(bx, by, bw, bh);
     }
-
     mmBg.lineStyle(1, 0xffffff, 0.35);
     mmBg.strokeRect(this.minimapX, this.MINIMAP_Y, this.MINIMAP_W, this.MINIMAP_H);
-    this.add.text(this.minimapX + this.MINIMAP_W / 2, this.MINIMAP_Y + 3, 'MAP', {
+    const mmLabel = this.add.text(this.minimapX + this.MINIMAP_W / 2, this.MINIMAP_Y + 3, 'MAP', {
       fontFamily: 'Courier New, monospace',
       fontSize: '10px',
       color: '#aaaaaa',
     }).setOrigin(0.5, 0);
     this.minimapDots = this.add.graphics();
+    this.mmContainer = this.add.container(0, 0, [mmBg, mmLabel, this.minimapDots]);
+    this.mmContainer.setVisible(false);
 
-    // Return to lobby button (bottom right)
-    this.createButton(width - 172, height - 60, '← LOBBY', 0x1a3a7a, async () => {
+    // Return to lobby button (always visible)
+    this.lobbyBtn = this.createButton(width - 172, height - 60, '← LOBBY', 0x1a3a7a, async () => {
       await leaveRoom();
       window.location.reload();
     });
+
+    // ── Waiting room UI ──
+    this.waitingTitle = this.add.text(width / 2, height / 2 - 80, 'WAITING ROOM', {
+      fontFamily: 'Courier New, monospace',
+      fontSize: '32px',
+      color: '#f5c518',
+      fontStyle: 'bold',
+      stroke: '#000000',
+      strokeThickness: 6,
+    }).setOrigin(0.5);
+
+    this.waitingCountText = this.add.text(width / 2, height / 2 - 30, '1 / 10 players', {
+      fontFamily: 'Courier New, monospace',
+      fontSize: '20px',
+      color: '#a8dadc',
+      stroke: '#000000',
+      strokeThickness: 3,
+    }).setOrigin(0.5);
+
+    this.waitingStatusText = this.add.text(width / 2, height / 2 + 20, '', {
+      fontFamily: 'Courier New, monospace',
+      fontSize: '16px',
+      color: '#7a9abf',
+      stroke: '#000000',
+      strokeThickness: 2,
+    }).setOrigin(0.5);
 
     // Event listeners
     this.gameScene.events.on('playerHpChanged', (hp: number, maxHp: number) => {
@@ -171,6 +212,9 @@ export class HUDScene extends Phaser.Scene {
     });
     this.gameScene.events.on('gameOver', (scores: { name: string; kills: number }[]) => {
       this.showGameOverScreen(scores);
+    });
+    this.gameScene.events.on('gameStarted', () => {
+      this.switchToGameHUD();
     });
 
     // Auto-connect from lobby selection
@@ -188,8 +232,10 @@ export class HUDScene extends Phaser.Scene {
     this.roomCodeText.setText('Reconnecting...').setColor('#ffff00');
     try {
       const room = await reconnect();
+      this.isHost = false;
       this.onConnected(room.roomId);
       this.gameScene.onRoomConnected(room);
+      this.setupWaitingRoomListeners(room);
     } catch (err) {
       console.warn('Auto-reconnect failed:', err);
       clearReconnectionData();
@@ -198,40 +244,56 @@ export class HUDScene extends Phaser.Scene {
   }
 
   private async handleConnect(mode: 'host' | 'join'): Promise<void> {
-    // If lobby already validated and joined the room (e.g. join-by-code), reuse it
+    // Lobby already connected the room — reuse it
     const existing = getRoom();
     if (existing) {
       this.isHost = mode === 'host';
       this.onConnected(existing.roomId);
       this.gameScene.onRoomConnected(existing);
+      this.setupWaitingRoomListeners(existing);
       return;
     }
 
+    // Fallback: reconnect path shouldn't reach here, but handle gracefully
     const username = this.registry.get('username') as string ?? 'Player';
-    const isPrivate = this.registry.get('isPrivate') as boolean ?? false;
     const roomCode = this.registry.get('roomCode') as string ?? '';
     const spriteKey = (this.registry.get('classData') as ClassData | undefined)?.spriteKey ?? CHARACTERS[0].spriteKey;
     try {
       this.roomCodeText.setText('Connecting...').setColor('#ffff00');
       let room;
-      if (mode === 'host') {
-        room = await createRoom(username, isPrivate, spriteKey);
-      } else if (roomCode) {
+      if (roomCode) {
         room = await joinRoom(roomCode, username, spriteKey);
       } else {
-        room = await joinAnyRoom(username, spriteKey);
+        this.roomCodeText.setText('Connection failed').setColor('#ff0000');
+        return;
       }
       this.isHost = mode === 'host';
       this.onConnected(room.roomId);
       this.gameScene.onRoomConnected(room);
+      this.setupWaitingRoomListeners(room);
     } catch (err) {
       console.error('Connection failed:', err);
       this.roomCodeText.setText('Connection failed').setColor('#ff0000');
     }
   }
 
+  private setupWaitingRoomListeners(room: any): void {
+    // Update player count whenever players join or leave
+    const updateCount = () => {
+      const max = room.state?.maxPlayers ?? 10;
+      const count = room.state?.players?.size ?? 1;
+      this.updateWaitingCount(count, max);
+    };
+
+    room.onStateChange.once(() => {
+      updateCount();
+      room.state.players?.onAdd(() => updateCount());
+      room.state.players?.onRemove(() => updateCount());
+    });
+  }
+
   private onConnected(roomId: string): void {
-    const { width, height } = this.scale;
+    const { height } = this.scale;
     this.roomCodeText.setText(`ROOM: ${roomId}`).setColor('#00ff00');
 
     if (this.isHost) {
@@ -246,7 +308,48 @@ export class HUDScene extends Phaser.Scene {
       });
       this.add.existing(copyBtn);
 
-      // End game button (below minimap)
+      // START GAME button (center bottom of screen)
+      const { width } = this.scale;
+      this.startGameBtn = this.createButton(width / 2 - 60, height / 2 + 70, 'START GAME', 0x1a7a3a, () => {
+        sendStartGame();
+        if (this.startGameBtn) {
+          this.startGameBtn.setVisible(false);
+        }
+      }, 120, 40);
+      this.add.existing(this.startGameBtn);
+      this.waitingStatusText.setVisible(false);
+    } else {
+      this.waitingStatusText.setText('Waiting for host to start...').setVisible(true);
+    }
+  }
+
+  private updateWaitingCount(count: number, max: number): void {
+    this.waitingCountText.setText(`${count} / ${max} players`);
+  }
+
+  private switchToGameHUD(): void {
+    this.gamePhase = 'playing';
+
+    // Hide waiting UI
+    this.waitingTitle.setVisible(false);
+    this.waitingCountText.setVisible(false);
+    this.waitingStatusText.setVisible(false);
+    if (this.startGameBtn) this.startGameBtn.setVisible(false);
+
+    // Show game HUD elements
+    this.hpBg.setVisible(true);
+    this.hpBarFill.setVisible(true);
+    this.hpText.setVisible(true);
+    this.classInfoText.setVisible(true);
+    this.dashText.setVisible(true);
+    this.controlsText.setVisible(true);
+    this.killLabel.setVisible(true);
+    this.killText.setVisible(true);
+    this.mmContainer.setVisible(true);
+
+    // END GAME button for host (below minimap)
+    if (this.isHost) {
+      const { width } = this.scale;
       this.endGameBtn = this.createButton(width - 116, this.MINIMAP_Y + this.MINIMAP_H + 8, 'END GAME', 0x880000, () => {
         this.gameScene.sendEndGame();
         if (this.endGameBtn) this.endGameBtn.setVisible(false);
@@ -257,8 +360,8 @@ export class HUDScene extends Phaser.Scene {
 
   private createButton(
     x: number, y: number, label: string, color: number, onClick: () => void,
+    btnW = 100, btnH = 36,
   ): Phaser.GameObjects.Container {
-    const btnW = 100; const btnH = 36;
     const container = this.add.container(x, y);
 
     const bg = this.add.graphics();
@@ -360,6 +463,8 @@ export class HUDScene extends Phaser.Scene {
 
   update(): void {
     if (!this.gameScene.player) return;
+    if (this.gamePhase !== 'playing') return;
+
     const { dashCharges, dashRechargeCooldown } = this.gameScene.player;
     const pips = '●'.repeat(dashCharges) + '○'.repeat(3 - dashCharges);
 
