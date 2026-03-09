@@ -172,7 +172,7 @@ export class HUDScene extends Phaser.Scene {
 
     // Return to lobby button (always visible)
     this.lobbyBtn = this.createButton(width - 172, height - 60, '← LOBBY', 0x1a3a7a, async () => {
-      await leaveRoom();
+      try { await leaveRoom(); } catch {}
       window.location.reload();
     });
 
