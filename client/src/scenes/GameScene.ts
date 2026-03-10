@@ -7,7 +7,6 @@ import {
   MAP_W,
   MAP_H,
   setGamePhase,
-  setWaitingRoomSize,
 } from '../map/CampusMap';
 import { ClassData, DEFAULT_CLASS, CHARACTERS } from '../data/Classes';
 import { Player } from '../entities/Player';
@@ -61,10 +60,10 @@ export class GameScene extends Phaser.Scene {
   create(): void {
     this.createCharacterAnimations();
 
-    // Start in waiting room — default 30×30; resized in setupMultiplayer once state.maxPlayers is known
+    // Start in waiting room (30×30 tiles)
     const waitW = 30 * TILE_SIZE;
     const waitH = 30 * TILE_SIZE;
-    this.drawWaitingRoom(30);
+    this.drawWaitingRoom();
 
     // Spawn at center of waiting room; server will update position on first state sync
     const spawnX = waitW / 2;
@@ -107,9 +106,10 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private drawWaitingRoom(size: number = 30): void {
+  private drawWaitingRoom(): void {
     if (this.mapLayer) { this.mapLayer.destroy(); this.mapLayer = undefined; }
     const g = this.add.graphics();
+    const size = 30;
 
     // Interior — walkable ground
     g.fillStyle(0x4a5568, 1);
@@ -132,7 +132,6 @@ export class GameScene extends Phaser.Scene {
     g.setDepth(0);
     this.mapLayer = g;
     setGamePhase('waiting');
-    setWaitingRoomSize(size);
   }
 
   startFullGame(): void {
@@ -162,14 +161,6 @@ export class GameScene extends Phaser.Scene {
 
   private setupMultiplayer(room: Room, state: any): void {
     const $ = getStateCallbacks(room) as any;
-
-    // Resize waiting room to match server's maxPlayers (≤10→10×10, ≤20→15×15, else 30×30)
-    const mp: number = state.maxPlayers ?? 10;
-    const roomSize = mp <= 10 ? 10 : mp <= 20 ? 15 : 30;
-    this.drawWaitingRoom(roomSize);
-    const roomW = roomSize * TILE_SIZE;
-    const roomH = roomSize * TILE_SIZE;
-    this.cameras.main.setBounds(0, 0, roomW, roomH);
 
     // Move local player to server-assigned spawn position and show name
     const myState = state.players.get(room.sessionId);

@@ -35,19 +35,12 @@ const RESPAWN_DELAY = 5000;
 const PLAYER_COLORS = [0x3498db, 0xe74c3c, 0x2ecc71, 0xf39c12];
 
 const VALID_MAX_PLAYERS = [5, 10, 20, 30];
+const WAITING_ROOM_SIZE = 30; // 30×30 tile waiting room
 const WAITING_TILE_SIZE = 16;
 
-function getWaitingRoomSize(maxPlayers: number): number {
-  if (maxPlayers <= 10) return 10;
-  if (maxPlayers <= 20) return 15;
-  return 30;
-}
-
-function waitingSpawn(size: number): { x: number; y: number } {
-  const margin = 2;
-  const inner = size - 2 * margin;
-  const tx = margin + Math.floor(Math.random() * inner);
-  const ty = margin + Math.floor(Math.random() * inner);
+function waitingSpawn(): { x: number; y: number } {
+  const tx = 4 + Math.floor(Math.random() * 22); // tiles 4..25
+  const ty = 4 + Math.floor(Math.random() * 22);
   return { x: tx * WAITING_TILE_SIZE + 8, y: ty * WAITING_TILE_SIZE + 8 };
 }
 
@@ -177,7 +170,7 @@ export class MyRoom extends Room {
   onJoin (client: Client, options: any) {
     if (!this.hostId) this.hostId = client.sessionId;
     const spawn = this.state.phase === "waiting"
-      ? waitingSpawn(getWaitingRoomSize(this.state.maxPlayers))
+      ? waitingSpawn()
       : SPAWN_POINTS[this.playerIndex % SPAWN_POINTS.length];
     const color = PLAYER_COLORS[this.playerIndex % PLAYER_COLORS.length];
     this.playerIndex++;
