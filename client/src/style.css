@@ -140,9 +140,9 @@ html, body {
 
 #lobby-screen > * { position: relative; z-index: 1; }
 
-/* ── Header: centered nav only ── */
+/* ── Header: nav tabs + right-side username button ── */
 .lobby-header {
-  display: flex; align-items: center; justify-content: center;
+  display: flex; align-items: center; justify-content: space-between;
   padding: 0 24px; height: 52px;
   background: rgba(8, 8, 8, 0.96);
   border-bottom: 3px solid #1a1a1a;
@@ -168,6 +168,18 @@ html, body {
 }
 .nav-tab:not(.active):not(.nav-disabled):hover { color: #999; }
 .nav-tab.nav-disabled { cursor: default; opacity: 0.35; }
+
+.change-user-btn {
+  padding: 8px 14px;
+  background: transparent;
+  border: 1px solid #444;
+  color: #888;
+  font-family: inherit; font-size: 8px; letter-spacing: 1px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+.change-user-btn:hover { color: #c41230; border-color: #c41230; }
 
 .soon-tag {
   font-size: 7px; letter-spacing: 1px;

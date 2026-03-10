@@ -428,6 +428,9 @@ export class GameScene extends Phaser.Scene {
       this.player.tryAttack(time, this.remotePlayers, sendAttack);
     }
 
+    // Smoothly interpolate all remote players toward their latest server position
+    this.remotePlayers.forEach(rp => rp.interpolate(delta));
+
     // Send position to server throttled to ~20fps
     if (this.room && time - this.lastSendTime > GameScene.SEND_INTERVAL) {
       sendPosition(this.player.x, this.player.y);

@@ -20,6 +20,8 @@ export class RemotePlayer {
   private currentAnim = '';
   private isMoving = false;
   private idleTimer?: Phaser.Time.TimerEvent;
+  private targetX: number;
+  private targetY: number;
 
   constructor(
     scene: Phaser.Scene,
@@ -33,6 +35,8 @@ export class RemotePlayer {
     this.flipForLeft = classData.flipForLeft;
     this.flipForRight = classData.flipForRight ?? false;
 
+    this.targetX = x;
+    this.targetY = y;
     this.sprite = scene.add.container(x, y);
     this.sprite.setSize(30, 30);
 
@@ -146,8 +150,8 @@ export class RemotePlayer {
   }
 
   updatePosition(x: number, y: number): void {
-    const dx = x - this.sprite.x;
-    const dy = y - this.sprite.y;
+    const dx = x - this.targetX;
+    const dy = y - this.targetY;
     const dist = Math.abs(dx) + Math.abs(dy);
     const scene = this.sprite.scene;
 
@@ -156,7 +160,7 @@ export class RemotePlayer {
       this.facingY = dy !== 0 ? Math.sign(dy) : 0;
       this.isMoving = true;
 
-      // Reset idle timer — switch to idle if no movement arrives within 150ms
+      // Reset idle timer — switch to idle if no position update arrives within 150ms
       if (this.idleTimer) { this.idleTimer.destroy(); this.idleTimer = undefined; }
       this.idleTimer = scene.time.delayedCall(150, () => {
         this.isMoving = false;
@@ -167,22 +171,23 @@ export class RemotePlayer {
       });
     }
 
+    this.targetX = x;
+    this.targetY = y;
+
     if (!this.alive) return;
 
     if (this.flipForLeft) this.body.setFlipX(this.facingX < 0);
     else if (this.flipForRight) this.body.setFlipX(this.facingX > 0);
     const dir = this.getDirection();
     this.playAnim(`${this.spriteKey}_${this.isMoving ? 'run' : 'idle'}_${dir}`);
+  }
 
-    // Tween slightly longer than the send interval (50ms) to smooth between packets
-    scene.tweens.add({
-      targets: this.sprite,
-      x,
-      y,
-      duration: 80,
-      ease: 'Linear',
-      overwrite: true,
-    });
+  /** Called every frame from GameScene.update(). Smoothly lerps toward the latest target. */
+  interpolate(delta: number): void {
+    // Exponential lerp — half-life ~40ms gives smooth but responsive catch-up
+    const alpha = 1 - Math.pow(0.5, delta / 40);
+    this.sprite.x += (this.targetX - this.sprite.x) * alpha;
+    this.sprite.y += (this.targetY - this.sprite.y) * alpha;
   }
 
   destroy(): void {

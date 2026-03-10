@@ -140,6 +140,13 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void): void {
   avatarEl.textContent = username.slice(0, 2).toUpperCase();
   screen.classList.remove('hidden');
 
+  // Change username button — clears stored name and reloads to login screen
+  const changeUserBtn = document.getElementById('change-user-btn')!;
+  changeUserBtn.addEventListener('click', () => {
+    localStorage.removeItem(USERNAME_KEY);
+    window.location.reload();
+  });
+
   // ── Character selection ──
   const savedKey = localStorage.getItem(CHARACTER_KEY) ?? CHARACTERS[0].spriteKey;
   let classData: ClassData = CHARACTERS.find(c => c.spriteKey === savedKey) ?? CHARACTERS[0];
