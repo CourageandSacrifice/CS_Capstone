@@ -298,18 +298,13 @@ export class HUDScene extends Phaser.Scene {
   }
 
   private setupWaitingRoomListeners(room: any): void {
-    // Update player count whenever players join or leave
     const updateCount = () => {
       const max = room.state?.maxPlayers ?? 10;
       const count = room.state?.players?.size ?? 1;
       this.updateWaitingCount(count, max);
     };
-
-    room.onStateChange.once(() => {
-      updateCount();
-      room.state.players?.onAdd(() => updateCount());
-      room.state.players?.onRemove(() => updateCount());
-    });
+    // onStateChange fires on every patch, which covers players joining/leaving
+    room.onStateChange(updateCount);
   }
 
   private onConnected(roomCode: string): void {
