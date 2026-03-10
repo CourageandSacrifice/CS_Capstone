@@ -155,7 +155,9 @@ export class MyRoom extends Room {
   }
 
   async onCreate (options: any) {
-    this.roomId = makeRoomCode();
+    // Use client-provided code (validated) or generate a server-side fallback
+    const provided = typeof options?.roomCode === 'string' ? options.roomCode.trim().toUpperCase() : '';
+    this.state.roomCode = /^[A-Z][A-Z0-9]{2,11}$/.test(provided) ? provided : makeRoomCode();
     if (options?.isPrivate === true) {
       await this.setPrivate(true);
     }
@@ -163,7 +165,7 @@ export class MyRoom extends Room {
     const validated = VALID_MAX_PLAYERS.includes(requestedMax) ? requestedMax : 10;
     this.maxClients = validated;
     this.state.maxPlayers = validated;
-    console.log(`Room created! ID: ${this.roomId}`, options?.isPrivate ? "(private)" : "(public)", `maxPlayers=${validated}`);
+    console.log(`Room created! Code: ${this.state.roomCode}`, options?.isPrivate ? "(private)" : "(public)", `maxPlayers=${validated}`);
   }
 
   onJoin (client: Client, options: any) {

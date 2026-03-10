@@ -17,4 +17,5 @@ export class MyRoomState extends Schema {
   @type("boolean") gameOver: boolean = false;
   @type("string") phase: string = "waiting";
   @type("number") maxPlayers: number = 10;
+  @type("string") roomCode: string = "";
 }

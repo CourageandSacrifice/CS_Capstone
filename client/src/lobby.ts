@@ -3,6 +3,16 @@ import { createRoom, joinAnyRoom, joinRoom } from './network/Network';
 
 const delay = (ms: number): Promise<void> => new Promise(r => setTimeout(r, ms));
 
+const CODE_WORDS = [
+  'FIRE','WOLF','BEAR','HAWK','LION','TIGER','STORM','BLADE',
+  'IRON','GOLD','MOON','STAR','ROCK','BOLT','FROST','RAGE',
+  'CROW','VIPER','DUKE','ACE','NOVA','DUSK','PIKE','ZEAL',
+];
+function generateRoomCode(): string {
+  return CODE_WORDS[Math.floor(Math.random() * CODE_WORDS.length)] +
+         Math.floor(Math.random() * 100).toString().padStart(2, '0');
+}
+
 const USERNAME_KEY = 'cc_username';
 const CHARACTER_KEY = 'cc_character';
 
@@ -307,7 +317,8 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void): void {
 
     if (mode === 'host') {
       try {
-        await createRoom(username, isPrivate, classData.spriteKey, maxPlayers);
+        roomCode = generateRoomCode();
+        await createRoom(username, isPrivate, classData.spriteKey, maxPlayers, roomCode);
         await launchGame();
         resolve({ username, mode, isPrivate, roomCode, classData });
       } catch {
@@ -330,7 +341,8 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void): void {
       return;
     }
 
-    // Join by code
+    // Join by code — re-read input to ensure latest value, trimmed and uppercased
+    roomCode = roomCodeInput.value.trim().toUpperCase();
     joinStatus.textContent = '';
     try {
       await joinRoom(roomCode, username, classData.spriteKey);

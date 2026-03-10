@@ -27,6 +27,8 @@ export class HUDScene extends Phaser.Scene {
   private isHost = false;
   private endGameBtn?: Phaser.GameObjects.Container;
   private gamePhase: 'waiting' | 'playing' = 'waiting';
+  private currentRoomCode = '';
+  private waitingPlayerCount = 0;
 
   // Waiting room UI
   private waitingTitle!: Phaser.GameObjects.Text;
@@ -138,12 +140,12 @@ export class HUDScene extends Phaser.Scene {
     }).setVisible(false);
 
     // Room status (bottom left) — visible during both phases
-    this.roomCodeText = this.add.text(16, height - 56, '', {
+    this.roomCodeText = this.add.text(16, height - 60, '', {
       fontFamily: 'Courier New, monospace',
-      fontSize: '16px',
+      fontSize: '22px',
       color: '#00ff00',
       stroke: '#000000',
-      strokeThickness: 3,
+      strokeThickness: 4,
     });
 
     // Minimap container (hidden until game starts)
@@ -233,7 +235,11 @@ export class HUDScene extends Phaser.Scene {
     try {
       const room = await reconnect();
       this.isHost = false;
-      this.onConnected(room.roomId);
+      const code = room.state?.roomCode || room.roomId;
+      this.onConnected(code);
+      room.onStateChange.once(() => {
+        if (room.state?.roomCode) this.updateRoomCodeDisplay(room.state.roomCode);
+      });
       this.gameScene.onRoomConnected(room);
       this.setupWaitingRoomListeners(room);
     } catch (err) {
@@ -248,13 +254,20 @@ export class HUDScene extends Phaser.Scene {
     const existing = getRoom();
     if (existing) {
       this.isHost = mode === 'host';
-      this.onConnected(existing.roomId);
+      // Read roomCode from registry (set by lobby) or fall back to state/roomId
+      const registryCode = this.registry.get('roomCode') as string ?? '';
+      const code = registryCode || existing.state?.roomCode || existing.roomId;
+      this.onConnected(code);
+      // Update once state syncs (handles random-join case where registry code is empty)
+      existing.onStateChange.once(() => {
+        if (existing.state?.roomCode) this.updateRoomCodeDisplay(existing.state.roomCode);
+      });
       this.gameScene.onRoomConnected(existing);
       this.setupWaitingRoomListeners(existing);
       return;
     }
 
-    // Fallback: reconnect path shouldn't reach here, but handle gracefully
+    // Fallback: lobby connection lost, try rejoining
     const username = this.registry.get('username') as string ?? 'Player';
     const roomCode = this.registry.get('roomCode') as string ?? '';
     const spriteKey = (this.registry.get('classData') as ClassData | undefined)?.spriteKey ?? CHARACTERS[0].spriteKey;
@@ -268,13 +281,18 @@ export class HUDScene extends Phaser.Scene {
         return;
       }
       this.isHost = mode === 'host';
-      this.onConnected(room.roomId);
+      this.onConnected(room.state?.roomCode || room.roomId);
       this.gameScene.onRoomConnected(room);
       this.setupWaitingRoomListeners(room);
     } catch (err) {
       console.error('Connection failed:', err);
       this.roomCodeText.setText('Connection failed').setColor('#ff0000');
     }
+  }
+
+  private updateRoomCodeDisplay(code: string): void {
+    this.currentRoomCode = code;
+    this.roomCodeText.setText(`ROOM: ${code}`).setColor('#00ff00');
   }
 
   private setupWaitingRoomListeners(room: any): void {
@@ -292,39 +310,53 @@ export class HUDScene extends Phaser.Scene {
     });
   }
 
-  private onConnected(roomId: string): void {
+  private onConnected(roomCode: string): void {
     const { height } = this.scale;
-    this.roomCodeText.setText(`ROOM: ${roomId}`).setColor('#00ff00');
+    this.currentRoomCode = roomCode;
+    this.roomCodeText.setText(`ROOM: ${roomCode}`).setColor('#00ff00');
+
+    // Copy code button next to room code (all players)
+    const copyBtn = this.createButton(164, height - 36, 'COPY CODE', 0x1a4a2a, () => {
+      navigator.clipboard.writeText(this.currentRoomCode).then(() => {
+        this.roomCodeText.setText('COPIED!').setColor('#f5c518');
+        this.time.delayedCall(1500, () => {
+          this.roomCodeText.setText(`ROOM: ${this.currentRoomCode}`).setColor('#00ff00');
+        });
+      }).catch(() => {
+        this.roomCodeText.setText(`CODE: ${this.currentRoomCode}`).setColor('#f5c518');
+        this.time.delayedCall(3000, () => {
+          this.roomCodeText.setText(`ROOM: ${this.currentRoomCode}`).setColor('#00ff00');
+        });
+      });
+    }, 120, 42);
+    this.add.existing(copyBtn);
 
     if (this.isHost) {
-      // Copy code button next to room code
-      const copyBtn = this.createButton(140, height - 28, 'COPY CODE', 0x1a4a2a, () => {
-        navigator.clipboard.writeText(roomId).then(() => {
-          this.roomCodeText.setText('COPIED!').setColor('#f5c518');
-          this.time.delayedCall(1500, () => {
-            this.roomCodeText.setText(`ROOM: ${roomId}`).setColor('#00ff00');
-          });
-        }).catch(() => {});
-      });
-      this.add.existing(copyBtn);
-
-      // START GAME button (center bottom of screen)
+      // START GAME button (center bottom of screen) — disabled until 2+ players
       const { width } = this.scale;
-      this.startGameBtn = this.createButton(width / 2 - 60, height / 2 + 70, 'START GAME', 0x1a7a3a, () => {
+      this.startGameBtn = this.createButton(width / 2 - 80, height / 2 + 70, 'START GAME', 0x1a7a3a, () => {
+        if (this.waitingPlayerCount < 2) return;
         sendStartGame();
-        if (this.startGameBtn) {
-          this.startGameBtn.setVisible(false);
-        }
-      }, 120, 40);
+        if (this.startGameBtn) this.startGameBtn.setVisible(false);
+      }, 160, 52);
+      this.startGameBtn.setAlpha(0.4); // disabled until 2 players
       this.add.existing(this.startGameBtn);
-      this.waitingStatusText.setVisible(false);
+      this.waitingStatusText.setText('Need 2+ players to start').setVisible(true);
     } else {
       this.waitingStatusText.setText('Waiting for host to start...').setVisible(true);
     }
   }
 
   private updateWaitingCount(count: number, max: number): void {
+    this.waitingPlayerCount = count;
     this.waitingCountText.setText(`${count} / ${max} players`);
+    if (this.isHost && this.startGameBtn) {
+      const canStart = count >= 2;
+      this.startGameBtn.setAlpha(canStart ? 1 : 0.4);
+      if (this.isHost) {
+        this.waitingStatusText.setText(canStart ? 'Ready to start!' : 'Need 2+ players to start').setVisible(true);
+      }
+    }
   }
 
   private switchToGameHUD(): void {
