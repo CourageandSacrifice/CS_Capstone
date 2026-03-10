@@ -219,14 +219,16 @@ export class HUDScene extends Phaser.Scene {
       this.switchToGameHUD();
     });
 
-    // Auto-connect from lobby selection
-    if (hasReconnectionToken()) {
+    // Auto-connect: lobby already established the room — always prefer that over reconnect token
+    const mode = this.registry.get('mode') as 'host' | 'join' | undefined;
+    if (getRoom()) {
+      // Lobby connected — reuse existing room directly
+      this.time.delayedCall(100, () => this.handleConnect(mode ?? 'join'));
+    } else if (hasReconnectionToken()) {
+      // Page was refreshed mid-game — attempt WebSocket reconnect
       this.attemptReconnect();
-    } else {
-      const mode = this.registry.get('mode') as 'host' | 'join' | undefined;
-      if (mode) {
-        this.time.delayedCall(100, () => this.handleConnect(mode));
-      }
+    } else if (mode) {
+      this.time.delayedCall(100, () => this.handleConnect(mode));
     }
   }
 
