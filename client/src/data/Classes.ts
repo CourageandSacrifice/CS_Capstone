@@ -18,16 +18,6 @@ export interface ClassData {
 
 export const CHARACTERS: ClassData[] = [
   {
-    name: 'Knight',
-    color: 0x888888,
-    maxHp: 150, speed: 105, attackDamage: 35, attackRange: 40, attackRate: 500,
-    weaponName: 'Sword',
-    spriteKey: 'knight',
-    scale: 0.889, flipForLeft: true,
-    defaultTexture: 'knight_idle',
-    frameWidth: 96, frameHeight: 84,
-  },
-  {
     name: 'Adventurer',
     color: 0x4a9eff,
     maxHp: 100, speed: 105, attackDamage: 25, attackRange: 32, attackRate: 400,
@@ -36,16 +26,6 @@ export const CHARACTERS: ClassData[] = [
     scale: 0.78, flipForLeft: false,
     defaultTexture: 'adventurer_idle_down',
     frameWidth: 96, frameHeight: 80,
-  },
-  {
-    name: 'Warrior',
-    color: 0xd4a017,
-    maxHp: 130, speed: 105, attackDamage: 28, attackRange: 36, attackRate: 450,
-    weaponName: 'Battle Axe',
-    spriteKey: 'rpgm',
-    scale: 0.975, flipForLeft: false, flipForRight: true,
-    defaultTexture: 'rpgm_down_idle',
-    frameWidth: 64, frameHeight: 64,
   },
 ];
 

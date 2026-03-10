@@ -43,25 +43,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   preload(): void {
-    // Knight — all frames are 96px wide
-    for (const state of ['idle', 'walk', 'run', 'attack', 'death']) {
-      this.load.spritesheet(`knight_${state}`, `/characters/knight_${state}.png`,
-        { frameWidth: 96, frameHeight: 84 });
-    }
     // Adventurer — one texture per state+direction; all frames are 96px wide
     for (const state of ['idle', 'run', 'attack']) {
       for (const dir of ['down', 'up', 'left', 'right']) {
         this.load.spritesheet(`adventurer_${state}_${dir}`,
           `/characters/adventurer_${state}_${dir}.png`,
           { frameWidth: 96, frameHeight: 80 });
-      }
-    }
-    // RPGMCharacter — down/up/side variants; sheets are 2 rows of 64px each
-    for (const state of ['idle', 'walk', 'attack']) {
-      for (const variant of ['down', 'up', 'side']) {
-        this.load.spritesheet(`rpgm_${variant}_${state}`,
-          `/characters/rpgm_${variant}_${state}.png`,
-          { frameWidth: 64, frameHeight: 64 });
       }
     }
   }
@@ -348,27 +335,6 @@ export class GameScene extends Phaser.Scene {
   private createCharacterAnimations(): void {
     const dirs = ['down', 'up', 'left', 'right'];
 
-    // KNIGHT — all 4 dirs share the same texture; flipX handles left visually
-    const knightDefs = [
-      { state: 'idle',   texture: 'knight_idle',   end: 6,  fps: 8,  repeat: -1 },
-      { state: 'run',    texture: 'knight_walk',   end: 7,  fps: 8,  repeat: -1 },
-      { state: 'sprint', texture: 'knight_run',    end: 7,  fps: 12, repeat: -1 },
-      { state: 'attack', texture: 'knight_attack', end: 5,  fps: 12, repeat: 0  },
-      { state: 'death',  texture: 'knight_death',  end: 11, fps: 10, repeat: 0  },
-    ];
-    for (const def of knightDefs) {
-      for (const dir of dirs) {
-        const key = `knight_${def.state}_${dir}`;
-        if (this.anims.exists(key)) this.anims.remove(key);
-        this.anims.create({
-          key,
-          frames: this.anims.generateFrameNumbers(def.texture, { start: 0, end: def.end }),
-          frameRate: def.fps,
-          repeat: def.repeat,
-        });
-      }
-    }
-
     // ADVENTURER — separate texture per state+direction
     const advDefs = [
       { state: 'idle',   srcState: 'idle',   fps: 8,  repeat: -1 },
@@ -383,28 +349,6 @@ export class GameScene extends Phaser.Scene {
         this.anims.create({
           key,
           frames: this.anims.generateFrameNumbers(`adventurer_${def.srcState}_${dir}`, { start: 0, end: 7 }),
-          frameRate: def.fps,
-          repeat: def.repeat,
-        });
-      }
-    }
-
-    // RPGM — down/up unique textures; left+right share 'side' texture (flipX for left)
-    const rpgmDirMap: Record<string, string> = { down: 'down', up: 'up', right: 'side', left: 'side' };
-    const rpgmDefs = [
-      { state: 'idle',   srcState: 'idle',   end: 3, fps: 6,  repeat: -1 },
-      { state: 'run',    srcState: 'walk',   end: 3, fps: 8,  repeat: -1 },
-      { state: 'sprint', srcState: 'walk',   end: 3, fps: 12, repeat: -1 },
-      { state: 'attack', srcState: 'attack', end: 1, fps: 10, repeat: 0  },
-    ];
-    for (const def of rpgmDefs) {
-      for (const dir of dirs) {
-        const key = `rpgm_${def.state}_${dir}`;
-        const texture = `rpgm_${rpgmDirMap[dir]}_${def.srcState}`;
-        if (this.anims.exists(key)) this.anims.remove(key);
-        this.anims.create({
-          key,
-          frames: this.anims.generateFrameNumbers(texture, { start: 0, end: def.end }),
           frameRate: def.fps,
           repeat: def.repeat,
         });

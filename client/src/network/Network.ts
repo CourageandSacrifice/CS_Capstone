@@ -34,19 +34,19 @@ function setupRoom(r: Room): Room {
   return room;
 }
 
-export async function autoJoin(name: string, spriteKey = 'archer'): Promise<Room> {
+export async function autoJoin(name: string, spriteKey = 'adventurer'): Promise<Room> {
   const c = initClient();
   const r = await c.joinOrCreate('my_room', { name, spriteKey });
   return setupRoom(r);
 }
 
-export async function createRoom(name: string, isPrivate = false, spriteKey = 'archer', maxPlayers = 10): Promise<Room> {
+export async function createRoom(name: string, isPrivate = false, spriteKey = 'adventurer', maxPlayers = 10): Promise<Room> {
   const c = initClient();
   const r = await c.create('my_room', { name, isPrivate, spriteKey, maxPlayers });
   return setupRoom(r);
 }
 
-export async function joinRoom(roomCode: string, name: string, spriteKey = 'archer'): Promise<Room> {
+export async function joinRoom(roomCode: string, name: string, spriteKey = 'adventurer'): Promise<Room> {
   const c = initClient();
   const r = await c.joinById(roomCode.trim().toUpperCase(), { name, spriteKey });
   return setupRoom(r);
@@ -78,7 +78,7 @@ export function getRoom(): Room | undefined {
   return room;
 }
 
-export async function joinAnyRoom(name: string, spriteKey = 'archer'): Promise<Room> {
+export async function joinAnyRoom(name: string, spriteKey = 'adventurer'): Promise<Room> {
   const c = initClient();
   const r = await c.join('my_room', { name, isPrivate: false, spriteKey });
   return setupRoom(r);

@@ -19,6 +19,7 @@ export class RemotePlayer {
   private facingY = 1; // default facing down
   private currentAnim = '';
   private isMoving = false;
+  private idleTimer?: Phaser.Time.TimerEvent;
 
   constructor(
     scene: Phaser.Scene,
@@ -148,35 +149,44 @@ export class RemotePlayer {
     const dx = x - this.sprite.x;
     const dy = y - this.sprite.y;
     const dist = Math.abs(dx) + Math.abs(dy);
+    const scene = this.sprite.scene;
 
     if (dist > 0.5) {
-      // Update facing — Y-axis priority matches Player.getDirection()
       this.facingX = dx !== 0 ? Math.sign(dx) : 0;
       this.facingY = dy !== 0 ? Math.sign(dy) : 0;
       this.isMoving = true;
-    } else {
-      this.isMoving = false;
+
+      // Reset idle timer — switch to idle if no movement arrives within 150ms
+      if (this.idleTimer) { this.idleTimer.destroy(); this.idleTimer = undefined; }
+      this.idleTimer = scene.time.delayedCall(150, () => {
+        this.isMoving = false;
+        this.idleTimer = undefined;
+        if (!this.alive) return;
+        const dir = this.getDirection();
+        this.playAnim(`${this.spriteKey}_idle_${dir}`);
+      });
     }
 
-    if (!this.alive) return; // don't override death pose with movement anim
+    if (!this.alive) return;
 
     if (this.flipForLeft) this.body.setFlipX(this.facingX < 0);
     else if (this.flipForRight) this.body.setFlipX(this.facingX > 0);
     const dir = this.getDirection();
     this.playAnim(`${this.spriteKey}_${this.isMoving ? 'run' : 'idle'}_${dir}`);
 
-    const scene = this.sprite.scene;
+    // Tween slightly longer than the send interval (50ms) to smooth between packets
     scene.tweens.add({
       targets: this.sprite,
       x,
       y,
-      duration: 50,
+      duration: 80,
       ease: 'Linear',
       overwrite: true,
     });
   }
 
   destroy(): void {
+    if (this.idleTimer) { this.idleTimer.destroy(); this.idleTimer = undefined; }
     this.sprite.destroy();
   }
 }
