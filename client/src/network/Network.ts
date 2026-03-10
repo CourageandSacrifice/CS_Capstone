@@ -40,16 +40,15 @@ export async function autoJoin(name: string, spriteKey = 'archer'): Promise<Room
   return setupRoom(r);
 }
 
-export async function createRoom(name: string, isPrivate = false, spriteKey = 'archer', maxPlayers = 10, roomCode = ''): Promise<Room> {
+export async function createRoom(name: string, isPrivate = false, spriteKey = 'archer', maxPlayers = 10): Promise<Room> {
   const c = initClient();
-  const r = await c.create('my_room', { name, isPrivate, spriteKey, maxPlayers, roomCode });
+  const r = await c.create('my_room', { name, isPrivate, spriteKey, maxPlayers });
   return setupRoom(r);
 }
 
 export async function joinRoom(roomCode: string, name: string, spriteKey = 'archer'): Promise<Room> {
   const c = initClient();
-  const code = roomCode.trim().toUpperCase();
-  const r = await c.join('my_room', { roomCode: code, name, spriteKey });
+  const r = await c.joinById(roomCode.trim().toUpperCase(), { name, spriteKey });
   return setupRoom(r);
 }
 
