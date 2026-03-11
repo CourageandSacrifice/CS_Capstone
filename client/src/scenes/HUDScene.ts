@@ -26,6 +26,7 @@ export class HUDScene extends Phaser.Scene {
 
   private isHost = false;
   private endGameBtn?: Phaser.GameObjects.Container;
+  private gameOverObjects: Phaser.GameObjects.GameObject[] = [];
   private gamePhase: 'waiting' | 'playing' = 'waiting';
   private currentRoomCode = '';
   private waitingPlayerCount = 0;
@@ -218,6 +219,12 @@ export class HUDScene extends Phaser.Scene {
     this.gameScene.events.on('gameStarted', () => {
       this.switchToGameHUD();
     });
+    this.gameScene.events.on('revertedToWaiting', () => {
+      this.revertToWaiting();
+    });
+    this.gameScene.events.on('hostChanged', (hostSessionId: string) => {
+      this.onHostChanged(hostSessionId);
+    });
 
     // Auto-connect: lobby already established the room — always prefer that over reconnect token
     const mode = this.registry.get('mode') as 'host' | 'join' | undefined;
@@ -351,7 +358,7 @@ export class HUDScene extends Phaser.Scene {
       const canStart = count >= 2;
       this.startGameBtn.setAlpha(canStart ? 1 : 0.4);
       if (this.isHost) {
-        this.waitingStatusText.setText(canStart ? 'Ready to start!' : 'Need 2+ players to start').setVisible(true);
+        this.waitingStatusText.setText('Need 2+ players to start').setVisible(!canStart);
       }
     }
   }
@@ -359,13 +366,154 @@ export class HUDScene extends Phaser.Scene {
   private switchToGameHUD(): void {
     this.gamePhase = 'playing';
 
-    // Hide waiting UI
+    // Hide waiting UI immediately
     this.waitingTitle.setVisible(false);
     this.waitingCountText.setVisible(false);
     this.waitingStatusText.setVisible(false);
     if (this.startGameBtn) this.startGameBtn.setVisible(false);
 
-    // Show game HUD elements
+    // Run countdown, then reveal game HUD
+    this.gameScene.setCountdownActive(true);
+    this.showCountdown(() => {
+      this.gameScene.setCountdownActive(false);
+      this.revealGameHUD();
+    });
+  }
+
+  private showCountdown(onComplete: () => void): void {
+    const { width, height } = this.scale;
+    const cx = width / 2;
+    const cy = height / 2;
+
+    const overlay = this.add.graphics().setDepth(150);
+    overlay.fillStyle(0x000000, 0.45);
+    overlay.fillRect(0, 0, width, height);
+
+    const countText = this.add.text(cx, cy, '3', {
+      fontFamily: 'Courier New, monospace',
+      fontSize: '220px',
+      color: '#f5c518',
+      fontStyle: 'bold',
+      stroke: '#000000',
+      strokeThickness: 14,
+    }).setOrigin(0.5).setDepth(151);
+
+    const steps: Array<{ label: string; color: string; hold: number }> = [
+      { label: '3',     color: '#f5c518', hold: 900 },
+      { label: '2',     color: '#f5c518', hold: 900 },
+      { label: '1',     color: '#f5c518', hold: 900 },
+      { label: 'START', color: '#00ff88', hold: 550 },
+    ];
+    let step = 0;
+
+    const showStep = () => {
+      const { label, color, hold } = steps[step];
+      countText.setText(label).setColor(color).setAlpha(1).setScale(1.6);
+      this.tweens.add({
+        targets: countText,
+        scaleX: 1,
+        scaleY: 1,
+        duration: 220,
+        ease: 'Back.easeOut',
+      });
+
+      this.time.delayedCall(hold, () => {
+        step++;
+        if (step < steps.length) {
+          // Quick fade between numbers
+          this.tweens.add({
+            targets: countText,
+            alpha: 0,
+            duration: 80,
+            onComplete: showStep,
+          });
+        } else {
+          // Fade out overlay and text, then call back
+          this.tweens.add({
+            targets: [overlay, countText],
+            alpha: 0,
+            duration: 350,
+            onComplete: () => {
+              overlay.destroy();
+              countText.destroy();
+              onComplete();
+            },
+          });
+        }
+      });
+    };
+
+    showStep();
+  }
+
+  private revertToWaiting(): void {
+    this.gamePhase = 'waiting';
+
+    // Destroy game over overlay if still showing
+    this.gameOverObjects.forEach(o => { try { (o as any).destroy(); } catch {} });
+    this.gameOverObjects = [];
+
+    // Hide game HUD
+    this.hpBg.setVisible(false);
+    this.hpBarFill.setVisible(false);
+    this.hpText.setVisible(false);
+    this.classInfoText.setVisible(false);
+    this.dashText.setVisible(false);
+    this.controlsText.setVisible(false);
+    this.killLabel.setVisible(false);
+    this.killText.setVisible(false);
+    this.mmContainer.setVisible(false);
+    if (this.endGameBtn) { this.endGameBtn.destroy(); this.endGameBtn = undefined; }
+
+    // Show waiting room UI
+    this.waitingTitle.setVisible(true);
+    this.waitingCountText.setVisible(true);
+
+    // Check if this client is now the host
+    const room = getRoom();
+    const isNowHost = !!(room && room.sessionId === (room.state as any)?.hostSessionId);
+    this.isHost = isNowHost;
+
+    if (isNowHost) {
+      if (this.startGameBtn) this.startGameBtn.destroy();
+      const { width, height } = this.scale;
+      this.startGameBtn = this.createButton(width / 2 - 80, height / 2 + 70, 'START GAME', 0x1a7a3a, () => {
+        if (this.waitingPlayerCount < 2) return;
+        sendStartGame();
+        if (this.startGameBtn) this.startGameBtn.setVisible(false);
+      }, 160, 52);
+      this.startGameBtn.setAlpha(this.waitingPlayerCount >= 2 ? 1 : 0.4);
+      this.add.existing(this.startGameBtn);
+      this.waitingStatusText.setText('Need 2+ players to start').setVisible(this.waitingPlayerCount < 2);
+    } else {
+      if (this.startGameBtn) { this.startGameBtn.setVisible(false); }
+      this.waitingStatusText.setText('Waiting for host to start...').setVisible(true);
+    }
+  }
+
+  private onHostChanged(hostSessionId: string): void {
+    const room = getRoom();
+    if (!room) return;
+    const isNowHost = room.sessionId === hostSessionId;
+    if (isNowHost && !this.isHost) {
+      this.isHost = true;
+      if (this.gamePhase === 'waiting') {
+        // Promote this client to host in the waiting room
+        if (this.startGameBtn) this.startGameBtn.destroy();
+        const { width, height } = this.scale;
+        this.startGameBtn = this.createButton(width / 2 - 80, height / 2 + 70, 'START GAME', 0x1a7a3a, () => {
+          if (this.waitingPlayerCount < 2) return;
+          sendStartGame();
+          if (this.startGameBtn) this.startGameBtn.setVisible(false);
+        }, 160, 52);
+        this.startGameBtn.setAlpha(this.waitingPlayerCount >= 2 ? 1 : 0.4);
+        this.add.existing(this.startGameBtn);
+        this.waitingStatusText.setVisible(false);
+      }
+    }
+  }
+
+  private revealGameHUD(): void {
     this.hpBg.setVisible(true);
     this.hpBarFill.setVisible(true);
     this.hpText.setVisible(true);
@@ -376,7 +524,6 @@ export class HUDScene extends Phaser.Scene {
     this.killText.setVisible(true);
     this.mmContainer.setVisible(true);
 
-    // END GAME button for host (below minimap)
     if (this.isHost) {
       const { width } = this.scale;
       this.endGameBtn = this.createButton(width - 116, this.MINIMAP_Y + this.MINIMAP_H + 8, 'END GAME', 0x880000, () => {
@@ -465,17 +612,19 @@ export class HUDScene extends Phaser.Scene {
 
     let countdown = 5;
     const countText = this.add.text(cx, cy + 160,
-      `Returning to lobby in ${countdown}s...`, {
+      `New game starting in ${countdown}s...`, {
         fontFamily: 'Courier New, monospace', fontSize: '16px',
         color: '#aaaaaa', stroke: '#000000', strokeThickness: 2,
       }).setOrigin(0.5).setDepth(201);
+
+    // Store refs so revertToWaiting() can destroy them
+    this.gameOverObjects = [overlay, countText];
 
     this.time.addEvent({
       delay: 1000, repeat: 4,
       callback: () => {
         countdown--;
-        countText.setText(`Returning to lobby in ${countdown}s...`);
-        if (countdown <= 0) window.location.reload();
+        countText.setText(`New game starting in ${countdown}s...`);
       },
     });
   }

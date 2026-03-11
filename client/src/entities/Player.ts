@@ -14,6 +14,7 @@ export function drawSlash(
   dirY: number,
 ): void {
   const g = scene.add.graphics();
+  g.setPosition(wx, wy); // origin at player so scale tween stays centered
   g.setDepth(12);
 
   // Base angle from facing direction
@@ -22,18 +23,18 @@ export function drawSlash(
   const radius = 24;
   const steps = 10;
 
-  // Draw a fan arc from -sweepHalf to +sweepHalf
+  // Draw a fan arc relative to (0,0) = player position
   for (let i = 0; i < steps; i++) {
     const t = i / (steps - 1);
     const angle = baseAngle - sweepHalf + t * sweepHalf * 2;
-    const nx = wx + Math.cos(angle) * radius;
-    const ny = wy + Math.sin(angle) * radius;
+    const nx = Math.cos(angle) * radius;
+    const ny = Math.sin(angle) * radius;
     const alpha = 1 - Math.abs(t - 0.5) * 2; // fade at edges
     g.fillStyle(0xffffff, alpha * 0.85);
     g.fillCircle(nx, ny, 4);
   }
 
-  // Shrink and fade out
+  // Expand slightly and fade out
   scene.tweens.add({
     targets: g,
     alpha: 0,

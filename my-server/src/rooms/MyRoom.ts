@@ -35,12 +35,11 @@ const RESPAWN_DELAY = 5000;
 const PLAYER_COLORS = [0x3498db, 0xe74c3c, 0x2ecc71, 0xf39c12];
 
 const VALID_MAX_PLAYERS = [5, 10, 20, 30];
-const WAITING_ROOM_SIZE = 30; // 30×30 tile waiting room
 const WAITING_TILE_SIZE = 16;
 
 function waitingSpawn(): { x: number; y: number } {
-  const tx = 4 + Math.floor(Math.random() * 22); // tiles 4..25
-  const ty = 4 + Math.floor(Math.random() * 22);
+  const tx = 2 + Math.floor(Math.random() * 16); // tiles 2..17 inside 20×20 room
+  const ty = 2 + Math.floor(Math.random() * 16);
   return { x: tx * WAITING_TILE_SIZE + 8, y: ty * WAITING_TILE_SIZE + 8 };
 }
 
@@ -51,6 +50,16 @@ export class MyRoom extends Room {
   private lastHitTime = new Map<string, number>();
   private lastSwingTime = new Map<string, number>();
   private hostId = '';
+  private joinOrder: string[] = []; // tracks join order for host migration
+
+  private transferHost(): void {
+    const next = this.joinOrder[0];
+    if (next) {
+      this.hostId = next;
+      this.state.hostSessionId = next;
+      console.log(`Host transferred to ${next}`);
+    }
+  }
 
   messages = {
     move: (client: Client, message: { x: number; y: number }) => {
@@ -109,6 +118,9 @@ export class MyRoom extends Room {
         attacker.kills += 1;
         attacker.hp = attacker.maxHp;
 
+        // Notify all clients who killed whom so they can follow the killer camera
+        this.broadcast('killed', { victimId: targetId, killerId: client.sessionId });
+
         this.clock.setTimeout(() => {
           const spawn = SPAWN_POINTS[Math.floor(Math.random() * SPAWN_POINTS.length)];
           target.x = spawn.x;
@@ -144,10 +156,25 @@ export class MyRoom extends Room {
 
     endGame: (client: Client) => {
       if (client.sessionId !== this.hostId) return;
+      if (this.state.phase !== "playing") return;
+
+      // Collect final scores to broadcast before resetting
       this.state.gameOver = true;
-      // Disconnect all clients after a short delay so clients can show the screen
+
+      // After 5s, reset room to waiting instead of disconnecting
       this.clock.setTimeout(() => {
-        this.disconnect();
+        this.state.gameOver = false;
+        this.state.phase = "waiting";
+        this.unlock(); // allow new players to join again
+        this.state.players.forEach((player) => {
+          const spawn = waitingSpawn();
+          player.x = spawn.x;
+          player.y = spawn.y;
+          player.hp = player.maxHp;
+          player.alive = true;
+          player.kills = 0;
+        });
+        console.log(`Room ${this.roomId}: reset to waiting room`);
       }, 5000);
     },
 
@@ -182,7 +209,12 @@ export class MyRoom extends Room {
   }
 
   onJoin (client: Client, options: any) {
-    if (!this.hostId) this.hostId = client.sessionId;
+    this.joinOrder.push(client.sessionId);
+    if (!this.hostId) {
+      this.hostId = client.sessionId;
+      this.state.hostSessionId = client.sessionId;
+    }
+
     const spawn = this.state.phase === "waiting"
       ? waitingSpawn()
       : SPAWN_POINTS[this.playerIndex % SPAWN_POINTS.length];
@@ -214,16 +246,26 @@ export class MyRoom extends Room {
       console.log(client.sessionId, "reconnected!");
     } catch {
       console.log(client.sessionId, "reconnection timed out, removing player.");
+      const wasHost = client.sessionId === this.hostId;
+      const idx = this.joinOrder.indexOf(client.sessionId);
+      if (idx !== -1) this.joinOrder.splice(idx, 1);
       this.state.players.delete(client.sessionId);
+      if (wasHost) this.transferHost();
       console.log("Players remaining:", this.state.players.size);
     }
   }
 
   onLeave (client: Client, code: CloseCode) {
+    const wasHost = client.sessionId === this.hostId;
+    const idx = this.joinOrder.indexOf(client.sessionId);
+    if (idx !== -1) this.joinOrder.splice(idx, 1);
+
     this.state.players.delete(client.sessionId);
     this.lastAttackTime.delete(client.sessionId);
     this.lastHitTime.delete(client.sessionId);
     this.lastSwingTime.delete(client.sessionId);
+
+    if (wasHost) this.transferHost();
     console.log(client.sessionId, "left! Players:", this.state.players.size);
   }
 

@@ -18,4 +18,5 @@ export class MyRoomState extends Schema {
   @type("string") phase: string = "waiting";
   @type("number") maxPlayers: number = 10;
   @type("string") roomCode: string = "";
+  @type("string") hostSessionId: string = "";
 }

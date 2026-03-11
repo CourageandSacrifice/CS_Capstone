@@ -35,7 +35,10 @@ export class GameScene extends Phaser.Scene {
   private eliminatedText?: Phaser.GameObjects.Text;
   private eliminatedOverlay?: Phaser.GameObjects.Graphics;
   private mapLayer?: Phaser.GameObjects.Graphics;
+  private campusMapGraphics?: Phaser.GameObjects.Graphics;
+  private buildingLabelObjects: Phaser.GameObjects.Text[] = [];
   private gamePhase: 'waiting' | 'playing' = 'waiting';
+  private countdownActive = false;
 
   constructor() {
     super('GameScene');
@@ -59,9 +62,9 @@ export class GameScene extends Phaser.Scene {
   create(): void {
     this.createCharacterAnimations();
 
-    // Start in waiting room (30×30 tiles)
-    const waitW = 30 * TILE_SIZE;
-    const waitH = 30 * TILE_SIZE;
+    // Start in waiting room (20×20 tiles)
+    const waitW = 20 * TILE_SIZE;
+    const waitH = 20 * TILE_SIZE;
     this.drawWaitingRoom();
 
     // Spawn at center of waiting room; server will update position on first state sync
@@ -69,8 +72,8 @@ export class GameScene extends Phaser.Scene {
     const spawnY = waitH / 2;
     this.player = new Player(this, spawnX, spawnY, this.classData);
 
-    // Camera — zoom to show ~20 tiles across
-    this.cameras.main.setZoom(this.cameras.main.width / (20 * TILE_SIZE));
+    // Camera — zoom to show full 30-tile waiting room
+    this.cameras.main.setZoom(this.cameras.main.width / (22 * TILE_SIZE));
     this.cameras.main.setBounds(0, 0, waitW, waitH);
     this.cameras.main.startFollow(this.player.sprite, true, 0.1, 0.1);
     this.cameras.main.setBackgroundColor('#1a1a2e');
@@ -108,7 +111,7 @@ export class GameScene extends Phaser.Scene {
   private drawWaitingRoom(): void {
     if (this.mapLayer) { this.mapLayer.destroy(); this.mapLayer = undefined; }
     const g = this.add.graphics();
-    const size = 30;
+    const size = 20;
 
     // Interior — walkable ground
     g.fillStyle(0x4a5568, 1);
@@ -196,6 +199,8 @@ export class GameScene extends Phaser.Scene {
             this.hideEliminatedOverlay();
             this.player.sprite.x = playerState.x;
             this.player.sprite.y = playerState.y;
+            // Re-attach camera to local player after respawn (may have been following killer)
+            this.cameras.main.startFollow(this.player.sprite, true, 0.1, 0.1);
           }
         });
         return;
@@ -258,6 +263,11 @@ export class GameScene extends Phaser.Scene {
 
     $(state).listen('phase', (value: string) => {
       if (value === 'playing') this.startFullGame();
+      else if (value === 'waiting' && this.gamePhase === 'playing') this.revertToWaitingRoom();
+    });
+
+    $(state).listen('hostSessionId', (value: string) => {
+      this.events.emit('hostChanged', value);
     });
 
     $(state).listen('gameOver', () => {
@@ -268,6 +278,16 @@ export class GameScene extends Phaser.Scene {
       });
       scores.sort((a, b) => b.kills - a.kills);
       this.events.emit('gameOver', scores);
+    });
+
+    room.onMessage('killed', (data: { victimId: string; killerId: string }) => {
+      if (data.victimId !== room.sessionId) return;
+      // Camera follows the killer so the dead player can spectate briefly
+      const killer = this.remotePlayers.get(data.killerId);
+      if (killer) {
+        this.cameras.main.stopFollow();
+        this.cameras.main.startFollow(killer.sprite, true, 0.08, 0.08);
+      }
     });
 
     room.onMessage('attackEffect', (data: {
@@ -285,6 +305,47 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  setCountdownActive(v: boolean): void {
+    this.countdownActive = v;
+  }
+
+  revertToWaitingRoom(): void {
+    this.gamePhase = 'waiting';
+    this.countdownActive = false;
+
+    // Destroy campus map graphics and building labels
+    if (this.campusMapGraphics) { this.campusMapGraphics.destroy(); this.campusMapGraphics = undefined; }
+    this.buildingLabelObjects.forEach(t => t.destroy());
+    this.buildingLabelObjects = [];
+
+    // Redraw waiting room
+    this.drawWaitingRoom();
+
+    // Reset camera to waiting room bounds and zoom
+    const waitW = 20 * TILE_SIZE;
+    const waitH = 20 * TILE_SIZE;
+    this.cameras.main.setBounds(0, 0, waitW, waitH);
+    this.cameras.main.setZoom(this.cameras.main.width / (22 * TILE_SIZE));
+
+    // Sync player to server-assigned waiting room spawn
+    if (this.room) {
+      const myState = (this.room.state as any).players.get(this.room.sessionId);
+      if (myState) {
+        this.player.sprite.x = myState.x;
+        this.player.sprite.y = myState.y;
+      }
+    }
+
+    this.player.playRespawn();
+    this.hideEliminatedOverlay();
+
+    // Re-attach camera to local player (may have been following killer)
+    this.cameras.main.centerOn(this.player.sprite.x, this.player.sprite.y);
+    this.cameras.main.startFollow(this.player.sprite, true, 0.1, 0.1);
+
+    this.events.emit('revertedToWaiting');
+  }
+
   getRemotePlayers(): Map<string, RemotePlayer> {
     return this.remotePlayers;
   }
@@ -298,7 +359,7 @@ export class GameScene extends Phaser.Scene {
     const { width, height } = this.cameras.main;
 
     this.eliminatedOverlay = this.add.graphics();
-    this.eliminatedOverlay.fillStyle(0x000000, 0.55);
+    this.eliminatedOverlay.fillStyle(0x000000, 0.30);
     this.eliminatedOverlay.fillRect(0, 0, width, height);
     this.eliminatedOverlay.setScrollFactor(0).setDepth(99);
 
@@ -354,6 +415,7 @@ export class GameScene extends Phaser.Scene {
 
   private drawMap(): void {
     const g = this.add.graphics();
+    this.campusMapGraphics = g;
 
     const tileColors: Record<number, number> = {
       [TILE.GRASS]: 0x3a7d44,
@@ -394,11 +456,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   private drawBuildingLabels(): void {
+    this.buildingLabelObjects = [];
     for (const b of BUILDINGS) {
       const cx = (b.x + b.w / 2) * TILE_SIZE;
       const cy = (b.y + b.h / 2) * TILE_SIZE;
 
-      this.add
+      const t = this.add
         .text(cx, cy, b.name, {
           fontFamily: 'Courier New, monospace',
           fontSize: '20px',
@@ -409,28 +472,31 @@ export class GameScene extends Phaser.Scene {
         })
         .setOrigin(0.5)
         .setDepth(1);
+      this.buildingLabelObjects.push(t);
     }
   }
 
   update(time: number, delta: number): void {
     if (!this.player.alive) return;
 
-    this.player.update(time, delta, this.cursors);
+    // Block all local input during the pre-game countdown
+    if (!this.countdownActive) {
+      this.player.update(time, delta, this.cursors);
 
-    if (Phaser.Input.Keyboard.JustDown(this.spaceKey)) {
-      this.player.dash(time);
-    }
-    if (this.gamePhase === 'playing' && Phaser.Input.Keyboard.JustDown(this.attackKey)) {
-      this.player.tryAttack(time, this.remotePlayers, sendAttack, sendSwing);
+      if (Phaser.Input.Keyboard.JustDown(this.spaceKey)) {
+        this.player.dash(time);
+      }
+      if (this.gamePhase === 'playing' && Phaser.Input.Keyboard.JustDown(this.attackKey)) {
+        this.player.tryAttack(time, this.remotePlayers, sendAttack, sendSwing);
+      }
+
+      if (this.room && time - this.lastSendTime > GameScene.SEND_INTERVAL) {
+        sendPosition(this.player.x, this.player.y);
+        this.lastSendTime = time;
+      }
     }
 
-    // Smoothly interpolate all remote players toward their latest server position
+    // Always interpolate remote players (visible during countdown)
     this.remotePlayers.forEach(rp => rp.interpolate(delta));
-
-    // Send position to server throttled to ~20fps
-    if (this.room && time - this.lastSendTime > GameScene.SEND_INTERVAL) {
-      sendPosition(this.player.x, this.player.y);
-      this.lastSendTime = time;
-    }
   }
 }
