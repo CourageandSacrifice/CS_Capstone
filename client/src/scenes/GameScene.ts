@@ -11,8 +11,7 @@ import {
 import { ClassData, DEFAULT_CLASS, CHARACTERS } from '../data/Classes';
 import { Player } from '../entities/Player';
 import { RemotePlayer } from '../entities/RemotePlayer';
-import { sendPosition, sendAttack, sendEndGame } from '../network/Network';
-import { drawSlash } from '../entities/Player';
+import { sendPosition, sendAttack, sendSwing, sendEndGame } from '../network/Network';
 import { Room, getStateCallbacks } from '@colyseus/sdk';
 
 export class GameScene extends Phaser.Scene {
@@ -279,13 +278,10 @@ export class GameScene extends Phaser.Scene {
       dirX: number;
       dirY: number;
     }) => {
-      if (data.attackerId === room.sessionId) {
-        // Local player's own attack — show at their current position with facing direction
-        drawSlash(this, this.player.x, this.player.y, data.dirX, data.dirY);
-      } else {
-        const rp = this.remotePlayers.get(data.attackerId);
-        if (rp) rp.showAttackEffect(data.dirX, data.dirY);
-      }
+      // Local player draws slash immediately in tryAttack — skip to avoid double-slash
+      if (data.attackerId === room.sessionId) return;
+      const rp = this.remotePlayers.get(data.attackerId);
+      if (rp) rp.showAttackEffect(data.dirX, data.dirY);
     });
   }
 
@@ -425,7 +421,7 @@ export class GameScene extends Phaser.Scene {
       this.player.dash(time);
     }
     if (this.gamePhase === 'playing' && Phaser.Input.Keyboard.JustDown(this.attackKey)) {
-      this.player.tryAttack(time, this.remotePlayers, sendAttack);
+      this.player.tryAttack(time, this.remotePlayers, sendAttack, sendSwing);
     }
 
     // Smoothly interpolate all remote players toward their latest server position

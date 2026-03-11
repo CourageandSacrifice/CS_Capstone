@@ -238,10 +238,17 @@ export class Player {
     time: number,
     remotePlayers: Map<string, { sprite: Phaser.GameObjects.Container; alive: boolean }>,
     sendAttackFn: (id: string, dirX: number, dirY: number) => void,
+    sendSwingFn: (dirX: number, dirY: number) => void,
   ): void {
     // Only attack (animation + damage) when the cooldown has elapsed
     if (time - this.lastAttackTime < this.attackRate) return;
     this.lastAttackTime = time;
+
+    // Immediate local slash visual (no round-trip needed)
+    drawSlash(this.scene, this.sprite.x, this.sprite.y, this.facingX, this.facingY);
+
+    // Notify server to broadcast swing visual to others
+    sendSwingFn(this.facingX, this.facingY);
 
     // Play attack animation
     const dir = this.getDirection();

@@ -19,6 +19,7 @@ export class RemotePlayer {
   private facingY = 1; // default facing down
   private currentAnim = '';
   private isMoving = false;
+  private isAttacking = false;
   private idleTimer?: Phaser.Time.TimerEvent;
   private targetX: number;
   private targetY: number;
@@ -105,6 +106,7 @@ export class RemotePlayer {
   }
 
   showAttackEffect(dirX: number, dirY: number): void {
+    this.isAttacking = true;
     const dir = this.dirToString(dirX, dirY);
     const key = `${this.spriteKey}_attack_${dir}`;
     this.currentAnim = key;
@@ -112,10 +114,24 @@ export class RemotePlayer {
     if (this.flipForLeft) this.body.setFlipX(dirX < 0);
     else if (this.flipForRight) this.body.setFlipX(dirX > 0);
     this.body.play(key);
+
+    // Clear any stale ANIMATION_COMPLETE listeners before adding a fresh one
+    this.body.removeAllListeners(Phaser.Animations.Events.ANIMATION_COMPLETE);
     this.body.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+      this.isAttacking = false;
       this.currentAnim = '';
     });
-    drawSlash(this.sprite.scene, this.sprite.x, this.sprite.y, dirX, dirY);
+
+    // Safety fallback — reset isAttacking if ANIMATION_COMPLETE never fires (e.g. sprite hidden on death)
+    const scene = this.sprite.scene;
+    scene.time.delayedCall(800, () => {
+      if (this.isAttacking && this.currentAnim === key) {
+        this.isAttacking = false;
+        this.currentAnim = '';
+      }
+    });
+
+    drawSlash(scene, this.sprite.x, this.sprite.y, dirX, dirY);
   }
 
   private dirToString(dirX: number, dirY: number): string {
@@ -131,6 +147,8 @@ export class RemotePlayer {
   }
 
   playDeath(): void {
+    this.isAttacking = false;
+    this.body.removeAllListeners(Phaser.Animations.Events.ANIMATION_COMPLETE);
     const dir = this.getDirection();
     this.currentAnim = '';
     this.body.stop();
@@ -144,6 +162,8 @@ export class RemotePlayer {
   }
 
   playRespawn(): void {
+    this.isAttacking = false;
+    this.body.removeAllListeners(Phaser.Animations.Events.ANIMATION_COMPLETE);
     this.currentAnim = '';
     this.sprite.setVisible(true);
     this.body.play(`${this.spriteKey}_idle_down`);
@@ -166,6 +186,7 @@ export class RemotePlayer {
         this.isMoving = false;
         this.idleTimer = undefined;
         if (!this.alive) return;
+        if (this.isAttacking) return;
         const dir = this.getDirection();
         this.playAnim(`${this.spriteKey}_idle_${dir}`);
       });
@@ -178,8 +199,10 @@ export class RemotePlayer {
 
     if (this.flipForLeft) this.body.setFlipX(this.facingX < 0);
     else if (this.flipForRight) this.body.setFlipX(this.facingX > 0);
-    const dir = this.getDirection();
-    this.playAnim(`${this.spriteKey}_${this.isMoving ? 'run' : 'idle'}_${dir}`);
+    if (!this.isAttacking) {
+      const dir = this.getDirection();
+      this.playAnim(`${this.spriteKey}_${this.isMoving ? 'run' : 'idle'}_${dir}`);
+    }
   }
 
   /** Called every frame from GameScene.update(). Smoothly lerps toward the latest target. */

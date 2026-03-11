@@ -94,6 +94,11 @@ export function sendAttack(targetId: string, dirX: number, dirY: number): void {
   room.send('attack', { targetId, dirX, dirY });
 }
 
+export function sendSwing(dirX: number, dirY: number): void {
+  if (!room) return;
+  room.send('swing', { dirX, dirY });
+}
+
 export function sendEndGame(): void {
   if (!room) return;
   room.send('endGame');

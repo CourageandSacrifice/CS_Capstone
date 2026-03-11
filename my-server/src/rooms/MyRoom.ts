@@ -27,9 +27,9 @@ const SPAWN_POINTS = [
 ];
 
 const ATTACK_DAMAGE = 20;
-const ATTACK_RANGE = 30;
-const ATTACK_RATE = 500;
-const HIT_COOLDOWN = ATTACK_RATE / 2; // 250ms — how often a player can be hit
+const ATTACK_RANGE = 38;
+const ATTACK_RATE = 450;
+const HIT_COOLDOWN = 200; // how often a player can be hit
 const RESPAWN_DELAY = 5000;
 
 const PLAYER_COLORS = [0x3498db, 0xe74c3c, 0x2ecc71, 0xf39c12];
@@ -49,6 +49,7 @@ export class MyRoom extends Room {
   private playerIndex = 0;
   private lastAttackTime = new Map<string, number>();
   private lastHitTime = new Map<string, number>();
+  private lastSwingTime = new Map<string, number>();
   private hostId = '';
 
   messages = {
@@ -89,27 +90,17 @@ export class MyRoom extends Room {
       const dist = Math.sqrt(dx * dx + dy * dy);
       if (dist > ATTACK_RANGE) return;
 
-      // Directional check — target must be within 120° cone in front of attacker
+      // Directional check — target must be within ~150° cone in front of attacker
       const dirX = typeof message.dirX === 'number' ? message.dirX : 0;
       const dirY = typeof message.dirY === 'number' ? message.dirY : 1;
       const dirLen = Math.sqrt(dirX * dirX + dirY * dirY);
       if (dist > 0 && dirLen > 0) {
         const dot = (dx / dist) * (dirX / dirLen) + (dy / dist) * (dirY / dirLen);
-        if (dot < 0.5) return; // outside 120° cone (cos 60° = 0.5)
+        if (dot < 0.25) return; // outside ~150° cone (cos 75° ≈ 0.25)
       }
 
       this.lastAttackTime.set(client.sessionId, now);
       this.lastHitTime.set(targetId, now);
-
-      // Broadcast attack visual to all clients
-      this.broadcast('attackEffect', {
-        attackerId: client.sessionId,
-        targetId,
-        x: attacker.x,
-        y: attacker.y,
-        dirX,
-        dirY,
-      });
 
       target.hp -= ATTACK_DAMAGE;
       if (target.hp <= 0) {
@@ -126,6 +117,29 @@ export class MyRoom extends Room {
           target.alive = true;
         }, RESPAWN_DELAY);
       }
+    },
+
+    swing: (client: Client, message: { dirX?: number; dirY?: number }) => {
+      if (this.state.phase !== "playing") return;
+      const attacker = this.state.players.get(client.sessionId);
+      if (!attacker || !attacker.alive) return;
+
+      const now = Date.now();
+      const last = this.lastSwingTime.get(client.sessionId) ?? 0;
+      if (now - last < ATTACK_RATE) return;
+      this.lastSwingTime.set(client.sessionId, now);
+
+      const dirX = typeof message.dirX === 'number' ? message.dirX : 0;
+      const dirY = typeof message.dirY === 'number' ? message.dirY : 1;
+
+      this.broadcast('attackEffect', {
+        attackerId: client.sessionId,
+        targetId: '',
+        x: attacker.x,
+        y: attacker.y,
+        dirX,
+        dirY,
+      });
     },
 
     endGame: (client: Client) => {
@@ -209,6 +223,7 @@ export class MyRoom extends Room {
     this.state.players.delete(client.sessionId);
     this.lastAttackTime.delete(client.sessionId);
     this.lastHitTime.delete(client.sessionId);
+    this.lastSwingTime.delete(client.sessionId);
     console.log(client.sessionId, "left! Players:", this.state.players.size);
   }
 
