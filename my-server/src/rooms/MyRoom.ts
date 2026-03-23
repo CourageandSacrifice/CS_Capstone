@@ -14,17 +14,20 @@ function makeRoomCode(): string {
 
 const TILE_SIZE = 16;
 const MAP_W = 150;
-const MAP_H = 105;
+const MAP_H = 100;
 const WORLD_W = MAP_W * TILE_SIZE;
 const WORLD_H = MAP_H * TILE_SIZE;
 
-// Spawn positions on known path tiles (between buildings, not inside them)
-const SPAWN_POINTS = [
-  { x: 22 * TILE_SIZE + TILE_SIZE / 2, y: 28 * TILE_SIZE + TILE_SIZE / 2 }, // path west of Craton
-  { x: 22 * TILE_SIZE + TILE_SIZE / 2, y: 42 * TILE_SIZE + TILE_SIZE / 2 }, // path south of Stadium
-  { x: 22 * TILE_SIZE + TILE_SIZE / 2, y: 60 * TILE_SIZE + TILE_SIZE / 2 }, // path near Library
-  { x: 55 * TILE_SIZE + TILE_SIZE / 2, y: 42 * TILE_SIZE + TILE_SIZE / 2 }, // path between Craton & Round Table
-];
+// Safe spawn zone: open corridor between Robey (right edge tile 68) and Eliot/Main Hall (left edge tile 83).
+// Vertically: below Robey bottom (tile 53) and above Whitman Hall top (tile 68).
+// Explicitly excludes the top-left quadrant — pixel coords will be ~1100–1328 x, ~856–1080 y.
+const SPAWN_ZONE = { xMin: 68, xMax: 82, yMin: 53, yMax: 67 };
+
+function gameSpawnPoint(): { x: number; y: number } {
+  const tx = SPAWN_ZONE.xMin + Math.floor(Math.random() * (SPAWN_ZONE.xMax - SPAWN_ZONE.xMin + 1));
+  const ty = SPAWN_ZONE.yMin + Math.floor(Math.random() * (SPAWN_ZONE.yMax - SPAWN_ZONE.yMin + 1));
+  return { x: tx * TILE_SIZE + TILE_SIZE / 2, y: ty * TILE_SIZE + TILE_SIZE / 2 };
+}
 
 const ATTACK_DAMAGE = 20;
 const ATTACK_RANGE = 38;
@@ -51,6 +54,7 @@ export class MyRoom extends Room {
   private lastSwingTime = new Map<string, number>();
   private hostId = '';
   private joinOrder: string[] = []; // tracks join order for host migration
+  private autoEndTimer?: ReturnType<typeof this.clock.setTimeout>;
 
   private transferHost(): void {
     const next = this.joinOrder[0];
@@ -115,6 +119,7 @@ export class MyRoom extends Room {
       if (target.hp <= 0) {
         target.hp = 0;
         target.alive = false;
+        target.deaths += 1;
         attacker.kills += 1;
         attacker.hp = attacker.maxHp;
 
@@ -122,7 +127,7 @@ export class MyRoom extends Room {
         this.broadcast('killed', { victimId: targetId, killerId: client.sessionId });
 
         this.clock.setTimeout(() => {
-          const spawn = SPAWN_POINTS[Math.floor(Math.random() * SPAWN_POINTS.length)];
+          const spawn = gameSpawnPoint();
           target.x = spawn.x;
           target.y = spawn.y;
           target.hp = target.maxHp;
@@ -157,25 +162,8 @@ export class MyRoom extends Room {
     endGame: (client: Client) => {
       if (client.sessionId !== this.hostId) return;
       if (this.state.phase !== "playing") return;
-
-      // Collect final scores to broadcast before resetting
-      this.state.gameOver = true;
-
-      // After 5s, reset room to waiting instead of disconnecting
-      this.clock.setTimeout(() => {
-        this.state.gameOver = false;
-        this.state.phase = "waiting";
-        this.unlock(); // allow new players to join again
-        this.state.players.forEach((player) => {
-          const spawn = waitingSpawn();
-          player.x = spawn.x;
-          player.y = spawn.y;
-          player.hp = player.maxHp;
-          player.alive = true;
-          player.kills = 0;
-        });
-        console.log(`Room ${this.roomId}: reset to waiting room`);
-      }, 5000);
+      if (this.autoEndTimer) { this.autoEndTimer.clear(); this.autoEndTimer = undefined; }
+      this.triggerEndGame();
     },
 
     startGame: (client: Client) => {
@@ -183,9 +171,12 @@ export class MyRoom extends Room {
       if (this.state.phase !== "waiting") return;
       this.state.phase = "playing";
       this.lock(); // block new joins
+      const GAME_DURATION = 184000; // 3 min + ~4s countdown buffer
+      this.state.gameEndTime = Date.now() + GAME_DURATION;
+      this.autoEndTimer = this.clock.setTimeout(() => this.triggerEndGame(), GAME_DURATION);
       let i = 0;
       this.state.players.forEach((player) => {
-        const spawn = SPAWN_POINTS[i++ % SPAWN_POINTS.length];
+        const spawn = gameSpawnPoint();
         player.x = spawn.x;
         player.y = spawn.y;
         player.hp = player.maxHp;
@@ -193,6 +184,28 @@ export class MyRoom extends Room {
       });
       console.log(`Room ${this.roomId}: game started with ${this.state.players.size} players`);
     },
+  }
+
+  private triggerEndGame(): void {
+    this.state.gameOver = true;
+    this.state.gameEndTime = 0;
+
+    // After 5s, reset room to waiting instead of disconnecting
+    this.clock.setTimeout(() => {
+      this.state.gameOver = false;
+      this.state.phase = "waiting";
+      this.unlock(); // allow new players to join again
+      this.state.players.forEach((player) => {
+        const spawn = waitingSpawn();
+        player.x = spawn.x;
+        player.y = spawn.y;
+        player.hp = player.maxHp;
+        player.alive = true;
+        player.kills = 0;
+        player.deaths = 0;
+      });
+      console.log(`Room ${this.roomId}: reset to waiting room`);
+    }, 5000);
   }
 
   async onCreate (options: any) {
@@ -217,7 +230,7 @@ export class MyRoom extends Room {
 
     const spawn = this.state.phase === "waiting"
       ? waitingSpawn()
-      : SPAWN_POINTS[this.playerIndex % SPAWN_POINTS.length];
+      : gameSpawnPoint();
     const color = PLAYER_COLORS[this.playerIndex % PLAYER_COLORS.length];
     this.playerIndex++;
 

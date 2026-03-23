@@ -9,6 +9,7 @@ export class PlayerState extends Schema {
   @type("number") maxHp: number = 100;
   @type("boolean") alive: boolean = true;
   @type("number") kills: number = 0;
+  @type("number") deaths: number = 0;
   @type("string") spriteKey: string = "archer";
 }
 
@@ -19,4 +20,5 @@ export class MyRoomState extends Schema {
   @type("number") maxPlayers: number = 10;
   @type("string") roomCode: string = "";
   @type("string") hostSessionId: string = "";
+  @type("number") gameEndTime: number = 0;
 }

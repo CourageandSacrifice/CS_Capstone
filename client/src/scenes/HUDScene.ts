@@ -30,6 +30,9 @@ export class HUDScene extends Phaser.Scene {
   private gamePhase: 'waiting' | 'playing' = 'waiting';
   private currentRoomCode = '';
   private waitingPlayerCount = 0;
+  private timerText?: Phaser.GameObjects.Text;
+  private timerEvent?: Phaser.Time.TimerEvent;
+  private gameEndTime = 0;
 
   // Waiting room UI
   private waitingTitle!: Phaser.GameObjects.Text;
@@ -213,8 +216,12 @@ export class HUDScene extends Phaser.Scene {
     this.gameScene.events.on('playerKillsChanged', (kills: number) => {
       this.killText.setText(`${kills}`);
     });
-    this.gameScene.events.on('gameOver', (scores: { name: string; kills: number }[]) => {
+    this.gameScene.events.on('gameOver', (scores: { name: string; kills: number; deaths: number }[]) => {
       this.showGameOverScreen(scores);
+    });
+    this.gameScene.events.on('gameEndTimeSet', (endTime: number) => {
+      this.gameEndTime = endTime;
+      this.startTimer();
     });
     this.gameScene.events.on('gameStarted', () => {
       this.switchToGameHUD();
@@ -464,6 +471,9 @@ export class HUDScene extends Phaser.Scene {
     this.killText.setVisible(false);
     this.mmContainer.setVisible(false);
     if (this.endGameBtn) { this.endGameBtn.destroy(); this.endGameBtn = undefined; }
+    if (this.timerEvent) { this.timerEvent.destroy(); this.timerEvent = undefined; }
+    if (this.timerText) { this.timerText.destroy(); this.timerText = undefined; }
+    this.gameEndTime = 0;
 
     // Show waiting room UI
     this.waitingTitle.setVisible(true);
@@ -514,6 +524,8 @@ export class HUDScene extends Phaser.Scene {
   }
 
   private revealGameHUD(): void {
+    const { width } = this.scale;
+
     this.hpBg.setVisible(true);
     this.hpBarFill.setVisible(true);
     this.hpText.setVisible(true);
@@ -524,14 +536,45 @@ export class HUDScene extends Phaser.Scene {
     this.killText.setVisible(true);
     this.mmContainer.setVisible(true);
 
+    // Timer — centered under the minimap (top right)
+    this.timerText = this.add.text(
+      this.minimapX + this.MINIMAP_W / 2,
+      this.MINIMAP_Y + this.MINIMAP_H + 14,
+      '3:00',
+      {
+        fontFamily: 'Courier New, monospace',
+        fontSize: '26px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+        stroke: '#000000',
+        strokeThickness: 5,
+      },
+    ).setOrigin(0.5).setDepth(10);
+
     if (this.isHost) {
-      const { width } = this.scale;
       this.endGameBtn = this.createButton(width - 116, this.MINIMAP_Y + this.MINIMAP_H + 8, 'END GAME', 0x880000, () => {
         this.gameScene.sendEndGame();
         if (this.endGameBtn) this.endGameBtn.setVisible(false);
       });
       this.add.existing(this.endGameBtn);
     }
+  }
+
+  private startTimer(): void {
+    if (this.timerEvent) { this.timerEvent.destroy(); this.timerEvent = undefined; }
+    if (!this.timerText) return;
+
+    const tick = () => {
+      if (!this.timerText) return;
+      const remaining = Math.max(0, Math.ceil((this.gameEndTime - Date.now()) / 1000));
+      const mins = Math.floor(remaining / 60);
+      const secs = remaining % 60;
+      this.timerText.setText(`${mins}:${secs.toString().padStart(2, '0')}`);
+      this.timerText.setColor(remaining <= 30 ? '#ff4444' : '#ffffff');
+    };
+
+    tick(); // immediate first render
+    this.timerEvent = this.time.addEvent({ delay: 1000, loop: true, callback: tick });
   }
 
   private createButton(
@@ -580,30 +623,43 @@ export class HUDScene extends Phaser.Scene {
     return container;
   }
 
-  private showGameOverScreen(scores: { name: string; kills: number }[]): void {
+  private showGameOverScreen(scores: { name: string; kills: number; deaths: number }[]): void {
     const { width, height } = this.scale;
     const cx = width / 2; const cy = height / 2;
+
+    // Stop timer
+    if (this.timerEvent) { this.timerEvent.destroy(); this.timerEvent = undefined; }
+    if (this.timerText) { this.timerText.destroy(); this.timerText = undefined; }
 
     const overlay = this.add.graphics();
     overlay.fillStyle(0x000000, 0.75);
     overlay.fillRect(0, 0, width, height);
     overlay.setDepth(200);
 
-    this.add.text(cx, cy - 120, 'GAME OVER', {
+    this.add.text(cx, cy - 140, 'GAME OVER', {
       fontFamily: 'Courier New, monospace', fontSize: '52px', color: '#e63946',
       fontStyle: 'bold', stroke: '#000000', strokeThickness: 8,
     }).setOrigin(0.5).setDepth(201);
 
-    this.add.text(cx, cy - 52, '— FINAL SCORES —', {
-      fontFamily: 'Courier New, monospace', fontSize: '18px', color: '#a8dadc',
+    // Winner banner
+    if (scores.length > 0) {
+      this.add.text(cx, cy - 90, `★  ${scores[0].name}  WINS  ★`, {
+        fontFamily: 'Courier New, monospace', fontSize: '22px', color: '#f5c518',
+        fontStyle: 'bold', stroke: '#000000', strokeThickness: 4,
+      }).setOrigin(0.5).setDepth(201);
+    }
+
+    this.add.text(cx, cy - 56, '— FINAL SCORES —', {
+      fontFamily: 'Courier New, monospace', fontSize: '16px', color: '#a8dadc',
       stroke: '#000000', strokeThickness: 3,
     }).setOrigin(0.5).setDepth(201);
 
     scores.forEach((entry, i) => {
       const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
-      this.add.text(cx, cy - 14 + i * 36,
-        `${medal}  ${entry.name}  —  ${entry.kills} kills`, {
-          fontFamily: 'Courier New, monospace', fontSize: '20px',
+      const kd = (entry.kills / Math.max(entry.deaths, 1)).toFixed(2);
+      this.add.text(cx, cy - 22 + i * 34,
+        `${medal}  ${entry.name}  —  ${entry.kills}K / ${entry.deaths}D  (${kd} K/D)`, {
+          fontFamily: 'Courier New, monospace', fontSize: '18px',
           color: i === 0 ? '#f4d03f' : '#ffffff',
           fontStyle: i === 0 ? 'bold' : 'normal',
           stroke: '#000000', strokeThickness: 3,

@@ -1,7 +1,6 @@
 import Phaser from 'phaser';
 import {
   MAP_DATA,
-  BUILDINGS,
   TILE_SIZE,
   TILE,
   MAP_W,
@@ -36,7 +35,6 @@ export class GameScene extends Phaser.Scene {
   private eliminatedOverlay?: Phaser.GameObjects.Graphics;
   private mapLayer?: Phaser.GameObjects.Graphics;
   private campusMapGraphics?: Phaser.GameObjects.Graphics;
-  private buildingLabelObjects: Phaser.GameObjects.Text[] = [];
   private gamePhase: 'waiting' | 'playing' = 'waiting';
   private countdownActive = false;
 
@@ -45,6 +43,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   preload(): void {
+    this.load.image('campus-map', '/campus-map.png');
+
     // Adventurer — one texture per state+direction; all frames are 96px wide
     for (const state of ['idle', 'run', 'attack']) {
       for (const dir of ['down', 'up', 'left', 'right']) {
@@ -142,7 +142,6 @@ export class GameScene extends Phaser.Scene {
 
     if (this.mapLayer) { this.mapLayer.destroy(); this.mapLayer = undefined; }
     this.drawMap();
-    this.drawBuildingLabels();
 
     const worldW = MAP_W * TILE_SIZE;
     const worldH = MAP_H * TILE_SIZE;
@@ -187,6 +186,19 @@ export class GameScene extends Phaser.Scene {
 
         $(playerState).listen("kills", () => {
           this.events.emit('playerKillsChanged', playerState.kills);
+        });
+
+        // Teleport local player when the server assigns a new spawn position.
+        // Only applies when the delta is large (>150px) — i.e. a server teleport, not normal movement.
+        $(playerState).listen("x", () => {
+          if (Math.abs(playerState.x - this.player.sprite.x) > 150) {
+            this.player.sprite.x = playerState.x;
+          }
+        });
+        $(playerState).listen("y", () => {
+          if (Math.abs(playerState.y - this.player.sprite.y) > 150) {
+            this.player.sprite.y = playerState.y;
+          }
         });
 
         $(playerState).listen("alive", () => {
@@ -270,13 +282,22 @@ export class GameScene extends Phaser.Scene {
       this.events.emit('hostChanged', value);
     });
 
+    $(state).listen('gameEndTime', (value: number) => {
+      if (value > 0) this.events.emit('gameEndTimeSet', value);
+    });
+
     $(state).listen('gameOver', () => {
       if (!state.gameOver) return;
-      const scores: { name: string; kills: number }[] = [];
+      const scores: { name: string; kills: number; deaths: number }[] = [];
       state.players.forEach((p: any) => {
-        scores.push({ name: p.name, kills: p.kills });
+        scores.push({ name: p.name, kills: p.kills, deaths: p.deaths });
       });
-      scores.sort((a, b) => b.kills - a.kills);
+      scores.sort((a, b) => {
+        const kdA = a.kills / Math.max(a.deaths, 1);
+        const kdB = b.kills / Math.max(b.deaths, 1);
+        if (kdB !== kdA) return kdB - kdA;
+        return b.kills - a.kills;
+      });
       this.events.emit('gameOver', scores);
     });
 
@@ -313,10 +334,13 @@ export class GameScene extends Phaser.Scene {
     this.gamePhase = 'waiting';
     this.countdownActive = false;
 
-    // Destroy campus map graphics and building labels
-    if (this.campusMapGraphics) { this.campusMapGraphics.destroy(); this.campusMapGraphics = undefined; }
-    this.buildingLabelObjects.forEach(t => t.destroy());
-    this.buildingLabelObjects = [];
+    // Destroy campus map graphics and background image
+    if (this.campusMapGraphics) {
+      const bgImg = (this.campusMapGraphics as any).__bgImage;
+      if (bgImg) bgImg.destroy();
+      this.campusMapGraphics.destroy();
+      this.campusMapGraphics = undefined;
+    }
 
     // Redraw waiting room
     this.drawWaitingRoom();
@@ -414,66 +438,21 @@ export class GameScene extends Phaser.Scene {
   }
 
   private drawMap(): void {
+    const worldW = MAP_W * TILE_SIZE;
+    const worldH = MAP_H * TILE_SIZE;
+
+    // Background image stretched to world size
+    const img = this.add.image(worldW / 2, worldH / 2, 'campus-map');
+    img.setDisplaySize(worldW, worldH);
+    img.setDepth(-1);
+
+    // Store as campusMapGraphics reference (used for cleanup on revert)
+    // We wrap in a container-like approach using a dummy graphics object
     const g = this.add.graphics();
+    g.setDepth(-2);
     this.campusMapGraphics = g;
-
-    const tileColors: Record<number, number> = {
-      [TILE.GRASS]: 0x3a7d44,
-      [TILE.PATH]: 0xc2b280,
-      [TILE.BUILDING]: 0x555555,
-      [TILE.FIELD]: 0x4caf50,
-    };
-
-    for (let y = 0; y < MAP_H; y++) {
-      for (let x = 0; x < MAP_W; x++) {
-        const tile = MAP_DATA[y][x];
-        let color = tileColors[tile] ?? 0x3a7d44;
-
-        if (tile === TILE.BUILDING) {
-          for (const b of BUILDINGS) {
-            if (x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h) {
-              color = b.color;
-              break;
-            }
-          }
-        }
-
-        g.fillStyle(color, 1);
-        g.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-      }
-    }
-
-    // Subtle grid
-    g.lineStyle(1, 0x000000, 0.06);
-    for (let y = 0; y <= MAP_H; y++) {
-      g.lineBetween(0, y * TILE_SIZE, MAP_W * TILE_SIZE, y * TILE_SIZE);
-    }
-    for (let x = 0; x <= MAP_W; x++) {
-      g.lineBetween(x * TILE_SIZE, 0, x * TILE_SIZE, MAP_H * TILE_SIZE);
-    }
-
-    g.setDepth(0);
-  }
-
-  private drawBuildingLabels(): void {
-    this.buildingLabelObjects = [];
-    for (const b of BUILDINGS) {
-      const cx = (b.x + b.w / 2) * TILE_SIZE;
-      const cy = (b.y + b.h / 2) * TILE_SIZE;
-
-      const t = this.add
-        .text(cx, cy, b.name, {
-          fontFamily: 'Courier New, monospace',
-          fontSize: '20px',
-          color: '#ffffff',
-          stroke: '#000000',
-          strokeThickness: 3,
-          fontStyle: 'bold',
-        })
-        .setOrigin(0.5)
-        .setDepth(1);
-      this.buildingLabelObjects.push(t);
-    }
+    // Keep a reference to the bg image for cleanup
+    (g as any).__bgImage = img;
   }
 
   update(time: number, delta: number): void {
