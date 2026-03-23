@@ -175,6 +175,12 @@ export class RemotePlayer {
     const dist = Math.abs(dx) + Math.abs(dy);
     const scene = this.sprite.scene;
 
+    // Teleport threshold — snap instantly instead of lerping across the map on spawn/respawn
+    if (dist > 200) {
+      this.sprite.x = x;
+      this.sprite.y = y;
+    }
+
     if (dist > 0.5) {
       this.facingX = dx !== 0 ? Math.sign(dx) : 0;
       this.facingY = dy !== 0 ? Math.sign(dy) : 0;

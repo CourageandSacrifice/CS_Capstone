@@ -473,6 +473,23 @@ export class GameScene extends Phaser.Scene {
         sendPosition(this.player.x, this.player.y);
         this.lastSendTime = time;
       }
+
+      // Player-to-player collision: push local player out of remote player bodies
+      if (this.gamePhase === 'playing') {
+        const MIN_DIST = 28; // ~2× the half-size of a player sprite (14px radius each)
+        this.remotePlayers.forEach(rp => {
+          if (!rp.alive) return;
+          const dx = this.player.sprite.x - rp.sprite.x;
+          const dy = this.player.sprite.y - rp.sprite.y;
+          const distSq = dx * dx + dy * dy;
+          if (distSq > 0 && distSq < MIN_DIST * MIN_DIST) {
+            const dist = Math.sqrt(distSq);
+            const push = (MIN_DIST - dist) / dist;
+            this.player.sprite.x += dx * push;
+            this.player.sprite.y += dy * push;
+          }
+        });
+      }
     }
 
     // Always interpolate remote players (visible during countdown)
