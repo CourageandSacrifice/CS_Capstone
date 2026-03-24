@@ -19,24 +19,26 @@ export interface Building {
 }
 
 export const BUILDINGS: Building[] = [
-  // Top-left: bleacher strip above the soccer field
-  { name: 'Stadium',     x: 10, y: 5,  w: 28, h: 6,  color: 0x5a5a6e },
-  // Left column: soccer/football field — marked TILE.FIELD so it stays walkable
-  { name: 'Field',       x: 8,  y: 12, w: 35, h: 60, color: 0x2d8a4e },
-  // Upper center-left: white columned academic building
-  { name: 'Craton Hall', x: 57, y: 5,  w: 22, h: 17, color: 0xd4c5a0 },
-  // Upper right: large brick / slate-roof arena
-  { name: 'Arena',       x: 83, y: 4,  w: 60, h: 21, color: 0x8b4513 },
-  // Center: Robey building
-  { name: 'Robey',       x: 49, y: 37, w: 19, h: 16, color: 0x6b4226 },
-  // Center-right: small red building
-  { name: 'Eliot Hall',  x: 83, y: 37, w: 17, h: 13, color: 0x8b3a3a },
+  // Left: bleacher strip (solid collision, sits beside the field)
+  { name: 'Stadium',     x: 4,  y: 5,  w: 16, h: 10, color: 0x7a5c3a },
+  // Left: sports field — walkable, not a wall
+  { name: 'Field',       x: 4,  y: 16, w: 16, h: 52, color: 0x2d8a4e },
+  // Upper center: academic hall
+  { name: 'Craton',      x: 38, y: 5,  w: 14, h: 12, color: 0x556b2f },
+  // Upper right: large arena
+  { name: 'Arena',       x: 57, y: 3,  w: 40, h: 22, color: 0x8b4513 },
+  // Center-left: Robey
+  { name: 'Robey',       x: 25, y: 40, w: 9,  h: 14, color: 0x6b4226 },
+  // Center: Round Table
+  { name: 'Round Table', x: 57, y: 44, w: 10, h: 9,  color: 0x8b6914 },
+  // Center-right: PAC
+  { name: 'PAC',         x: 100,y: 52, w: 10, h: 18, color: 0x4b0082 },
   // Bottom-left: Library
-  { name: 'Library',     x: 5,  y: 75, w: 23, h: 17, color: 0x4a708b },
-  // Bottom-center: academic/residential hall
-  { name: 'Whitman Hall',x: 49, y: 68, w: 32, h: 22, color: 0x5f6b4e },
-  // Bottom-right: large Victorian main hall
-  { name: 'Main Hall',   x: 83, y: 60, w: 55, h: 33, color: 0x8b0000 },
+  { name: 'Library',     x: 4,  y: 74, w: 16, h: 14, color: 0x4a708b },
+  // Bottom-center: Academic
+  { name: 'Academic',    x: 30, y: 70, w: 18, h: 14, color: 0x5f6b4e },
+  // Bottom-right: Main Hall (largest building)
+  { name: 'Main Hall',   x: 60, y: 68, w: 35, h: 26, color: 0x8b0000 },
 ];
 
 function generateMap(): number[][] {

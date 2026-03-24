@@ -18,9 +18,8 @@ const MAP_H = 100;
 const WORLD_W = MAP_W * TILE_SIZE;
 const WORLD_H = MAP_H * TILE_SIZE;
 
-// Safe spawn zone: open corridor between Robey (right edge tile 68) and Eliot/Main Hall (left edge tile 83).
-// Vertically: below Robey bottom (tile 53) and above Whitman Hall top (tile 68).
-// Explicitly excludes the top-left quadrant — pixel coords will be ~1100–1328 x, ~856–1080 y.
+// Safe spawn zone: open corridor right of Round Table (right edge tile 67) and above Main Hall (top tile 68).
+// Clear of all buildings — pixel coords ~1088–1328 x, ~848–1072 y.
 const SPAWN_ZONE = { xMin: 68, xMax: 82, yMin: 53, yMax: 67 };
 
 function gameSpawnPoint(): { x: number; y: number } {

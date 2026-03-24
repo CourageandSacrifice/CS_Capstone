@@ -6,6 +6,7 @@ import {
   MAP_W,
   MAP_H,
   setGamePhase,
+  BUILDINGS,
 } from '../map/CampusMap';
 import { ClassData, DEFAULT_CLASS, CHARACTERS } from '../data/Classes';
 import { Player } from '../entities/Player';
@@ -43,8 +44,6 @@ export class GameScene extends Phaser.Scene {
   }
 
   preload(): void {
-    this.load.image('campus-map', '/campus-map.png');
-
     // Adventurer — one texture per state+direction; all frames are 96px wide
     for (const state of ['idle', 'run', 'attack']) {
       for (const dir of ['down', 'up', 'left', 'right']) {
@@ -334,10 +333,7 @@ export class GameScene extends Phaser.Scene {
     this.gamePhase = 'waiting';
     this.countdownActive = false;
 
-    // Destroy campus map graphics and background image
     if (this.campusMapGraphics) {
-      const bgImg = (this.campusMapGraphics as any).__bgImage;
-      if (bgImg) bgImg.destroy();
       this.campusMapGraphics.destroy();
       this.campusMapGraphics = undefined;
     }
@@ -438,21 +434,35 @@ export class GameScene extends Phaser.Scene {
   }
 
   private drawMap(): void {
-    const worldW = MAP_W * TILE_SIZE;
-    const worldH = MAP_H * TILE_SIZE;
-
-    // Background image stretched to world size
-    const img = this.add.image(worldW / 2, worldH / 2, 'campus-map');
-    img.setDisplaySize(worldW, worldH);
-    img.setDepth(-1);
-
-    // Store as campusMapGraphics reference (used for cleanup on revert)
-    // We wrap in a container-like approach using a dummy graphics object
     const g = this.add.graphics();
-    g.setDepth(-2);
+
+    for (let y = 0; y < MAP_H; y++) {
+      for (let x = 0; x < MAP_W; x++) {
+        const tile = MAP_DATA[y][x];
+        let color = 0x4a7c59; // default grass
+        if (tile === TILE.PATH) color = 0x8a7a5a;
+        if (tile === TILE.BUILDING) {
+          // match building color by position
+          for (const b of BUILDINGS) {
+            if (x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h) {
+              color = b.color;
+              break;
+            }
+          }
+        }
+        if (tile === TILE.FIELD) color = 0x2d8a4e;
+        g.fillStyle(color, 1);
+        g.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+      }
+    }
+
+    // Subtle grid lines
+    g.lineStyle(1, 0x000000, 0.06);
+    for (let y = 0; y <= MAP_H; y++) g.lineBetween(0, y * TILE_SIZE, MAP_W * TILE_SIZE, y * TILE_SIZE);
+    for (let x = 0; x <= MAP_W; x++) g.lineBetween(x * TILE_SIZE, 0, x * TILE_SIZE, MAP_H * TILE_SIZE);
+
+    g.setDepth(0);
     this.campusMapGraphics = g;
-    // Keep a reference to the bg image for cleanup
-    (g as any).__bgImage = img;
   }
 
   update(time: number, delta: number): void {
