@@ -206,7 +206,7 @@ export class MyRoom extends Room {
         player.deaths = 0;
       });
       console.log(`Room ${this.roomId}: reset to waiting room`);
-    }, 5000);
+    }, 35000);
   }
 
   async onCreate (options: any) {

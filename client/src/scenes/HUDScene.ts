@@ -541,10 +541,10 @@ export class HUDScene extends Phaser.Scene {
     this.killText.setVisible(true);
     this.mmContainer.setVisible(true);
 
-    // Timer — centered under the minimap (top right)
+    // Timer — to the left of the minimap
     this.timerText = this.add.text(
-      this.minimapX + this.MINIMAP_W / 2,
-      this.MINIMAP_Y + this.MINIMAP_H + 14,
+      this.minimapX - 12,
+      this.MINIMAP_Y + this.MINIMAP_H / 2,
       '5:00',
       {
         fontFamily: 'Courier New, monospace',
@@ -554,7 +554,10 @@ export class HUDScene extends Phaser.Scene {
         stroke: '#000000',
         strokeThickness: 5,
       },
-    ).setOrigin(0.5).setDepth(10);
+    ).setOrigin(1, 0.5).setDepth(10);
+
+    // If gameEndTime already arrived before this HUD was revealed, start timer now
+    if (this.gameEndTime > 0) this.startTimer();
 
     if (this.isHost) {
       this.endGameBtn = this.createButton(width - 116, this.MINIMAP_Y + this.MINIMAP_H + 8, 'END GAME', 0x880000, () => {
@@ -644,59 +647,73 @@ export class HUDScene extends Phaser.Scene {
     overlay.fillRect(0, 0, width, height);
     overlay.setDepth(200);
 
-    this.add.text(cx, cy - 140, 'GAME OVER', {
+    const titleText = this.add.text(cx, cy - 140, 'GAME OVER', {
       fontFamily: 'Courier New, monospace', fontSize: '52px', color: '#e63946',
       fontStyle: 'bold', stroke: '#000000', strokeThickness: 8,
     }).setOrigin(0.5).setDepth(201);
 
+    const extraObjects: Phaser.GameObjects.GameObject[] = [overlay, titleText];
+
     if (timeLimitReached) {
-      this.add.text(cx, cy - 100, 'TIME LIMIT REACHED', {
+      extraObjects.push(this.add.text(cx, cy - 100, 'TIME LIMIT REACHED', {
         fontFamily: 'Courier New, monospace', fontSize: '18px', color: '#ff8c00',
         fontStyle: 'bold', stroke: '#000000', strokeThickness: 4,
-      }).setOrigin(0.5).setDepth(201);
+      }).setOrigin(0.5).setDepth(201));
     }
 
     // Winner banner
     const winnerY = timeLimitReached ? cy - 72 : cy - 90;
     if (scores.length > 0) {
-      this.add.text(cx, winnerY, `★  ${scores[0].name}  WINS  ★`, {
+      extraObjects.push(this.add.text(cx, winnerY, `★  ${scores[0].name}  WINS  ★`, {
         fontFamily: 'Courier New, monospace', fontSize: '22px', color: '#f5c518',
         fontStyle: 'bold', stroke: '#000000', strokeThickness: 4,
-      }).setOrigin(0.5).setDepth(201);
+      }).setOrigin(0.5).setDepth(201));
     }
 
-    this.add.text(cx, cy - 56, '— FINAL SCORES —', {
+    extraObjects.push(this.add.text(cx, cy - 56, '— FINAL SCORES —', {
       fontFamily: 'Courier New, monospace', fontSize: '16px', color: '#a8dadc',
       stroke: '#000000', strokeThickness: 3,
-    }).setOrigin(0.5).setDepth(201);
+    }).setOrigin(0.5).setDepth(201));
 
     scores.forEach((entry, i) => {
       const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
       const kd = (entry.kills / Math.max(entry.deaths, 1)).toFixed(2);
-      this.add.text(cx, cy - 22 + i * 34,
+      extraObjects.push(this.add.text(cx, cy - 22 + i * 34,
         `${medal}  ${entry.name}  —  ${entry.kills}K / ${entry.deaths}D  (${kd} K/D)`, {
           fontFamily: 'Courier New, monospace', fontSize: '18px',
           color: i === 0 ? '#f4d03f' : '#ffffff',
           fontStyle: i === 0 ? 'bold' : 'normal',
           stroke: '#000000', strokeThickness: 3,
-        }).setOrigin(0.5).setDepth(201);
+        }).setOrigin(0.5).setDepth(201));
     });
 
-    let countdown = 5;
-    const countText = this.add.text(cx, cy + 160,
-      `New game starting in ${countdown}s...`, {
-        fontFamily: 'Courier New, monospace', fontSize: '16px',
-        color: '#aaaaaa', stroke: '#000000', strokeThickness: 2,
-      }).setOrigin(0.5).setDepth(201);
+    let countdown = 30;
+    const countText = this.add.text(cx, cy + 160, `Closing in ${countdown}s`, {
+      fontFamily: 'Courier New, monospace', fontSize: '15px',
+      color: '#aaaaaa', stroke: '#000000', strokeThickness: 2,
+    }).setOrigin(0.5).setDepth(201);
 
-    // Store refs so revertToWaiting() can destroy them
-    this.gameOverObjects = [overlay, countText];
+    // Store all refs so revertToWaiting() can destroy them
+    this.gameOverObjects = [...extraObjects, countText];
 
     this.time.addEvent({
-      delay: 1000, repeat: 4,
+      delay: 1000,
+      repeat: 29,
       callback: () => {
         countdown--;
-        countText.setText(`New game starting in ${countdown}s...`);
+        if (countdown <= 10) countText.setColor('#ff4444');
+        if (countdown > 0) {
+          countText.setText(`Closing in ${countdown}s`);
+        } else {
+          // Destroy leaderboard overlay and all game-over objects
+          this.gameOverObjects.forEach(o => { try { (o as any).destroy(); } catch {} });
+          this.gameOverObjects = [];
+          // Show brief return message (server resets in ~5s)
+          this.add.text(cx, cy, 'Returning to lobby...', {
+            fontFamily: 'Courier New, monospace', fontSize: '20px',
+            color: '#aaaaaa', stroke: '#000000', strokeThickness: 3,
+          }).setOrigin(0.5).setScrollFactor(0).setDepth(201);
+        }
       },
     });
   }

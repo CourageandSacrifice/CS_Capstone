@@ -13,6 +13,10 @@ export function setBitmask(mask: boolean[][]): void {
   _walkBitmask = mask;
 }
 
+export function getBitmask(): boolean[][] | null {
+  return _walkBitmask;
+}
+
 function isWalkableColor(r: number, g: number, b: number): boolean {
   const lum = r + g + b;
   // Grass green: green dominant over red and blue, bright enough to exclude dark tree canopy
@@ -42,6 +46,28 @@ function erodeBitmask(mask: boolean[][], threshold: number): boolean[][] {
   return next;
 }
 
+/**
+ * Building footprints that must always be blocked, regardless of pixel color.
+ * Tile coords: [x1, y1, x2, y2] inclusive (150×100 grid).
+ * Tune these with the C-key collision viewer in localhost.
+ */
+const BUILDING_BLOCKS: [number, number, number, number][] = [
+  // Library (bottom-left, tan/yellow building)
+  [6, 68, 28, 87],
+];
+
+function applyBuildingBlocks(mask: boolean[][]): void {
+  for (const [x1, y1, x2, y2] of BUILDING_BLOCKS) {
+    for (let ty = y1; ty <= y2; ty++) {
+      for (let tx = x1; tx <= x2; tx++) {
+        if (ty >= 0 && ty < MAP_H && tx >= 0 && tx < MAP_W) {
+          mask[ty][tx] = false;
+        }
+      }
+    }
+  }
+}
+
 export function buildBitmaskFromImageData(imageData: ImageData, imgW: number, imgH: number): boolean[][] {
   let mask: boolean[][] = [];
   const offsets: [number, number][] = [[0.5, 0.5], [0.3, 0.3], [0.7, 0.3], [0.3, 0.7], [0.7, 0.7]];
@@ -60,6 +86,7 @@ export function buildBitmaskFromImageData(imageData: ImageData, imgW: number, im
   }
   mask = erodeBitmask(mask, 6);
   mask = erodeBitmask(mask, 6);
+  applyBuildingBlocks(mask);
   return mask;
 }
 

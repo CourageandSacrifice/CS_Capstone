@@ -79,6 +79,10 @@ export class Player {
   private facingX = 0;
   private facingY = 1; // default facing down
   private currentAnim = '';
+  private bounceRemainX = 0;
+  private bounceRemainY = 0;
+  private static readonly BOUNCE_DIST = TILE_SIZE * 2; // 2 tiles = 32px
+  private static readonly BOUNCE_SPEED = 200;          // px/s
 
   constructor(scene: Phaser.Scene, x: number, y: number, classData: ClassData) {
     this.scene = scene;
@@ -196,9 +200,38 @@ export class Player {
 
     if (this.canMove(newX, this.sprite.y, half)) {
       this.sprite.x = newX;
+      this.bounceRemainX = 0;
+    } else if (isMoving && !this.isDashing) {
+      this.bounceRemainX = -moveX * Player.BOUNCE_DIST;
     }
     if (this.canMove(this.sprite.x, newY, half)) {
       this.sprite.y = newY;
+      this.bounceRemainY = 0;
+    } else if (isMoving && !this.isDashing) {
+      this.bounceRemainY = -moveY * Player.BOUNCE_DIST;
+    }
+
+    // Step toward remaining bounce distance at fixed speed
+    const maxStep = Player.BOUNCE_SPEED * (delta / 1000);
+    if (this.bounceRemainX !== 0) {
+      const step = Math.sign(this.bounceRemainX) * Math.min(Math.abs(this.bounceRemainX), maxStep);
+      if (this.canMove(this.sprite.x + step, this.sprite.y, half)) {
+        this.sprite.x += step;
+        this.bounceRemainX -= step;
+        if (Math.abs(this.bounceRemainX) < 0.5) this.bounceRemainX = 0;
+      } else {
+        this.bounceRemainX = 0;
+      }
+    }
+    if (this.bounceRemainY !== 0) {
+      const step = Math.sign(this.bounceRemainY) * Math.min(Math.abs(this.bounceRemainY), maxStep);
+      if (this.canMove(this.sprite.x, this.sprite.y + step, half)) {
+        this.sprite.y += step;
+        this.bounceRemainY -= step;
+        if (Math.abs(this.bounceRemainY) < 0.5) this.bounceRemainY = 0;
+      } else {
+        this.bounceRemainY = 0;
+      }
     }
   }
 

@@ -20,7 +20,7 @@ export const CHARACTERS: ClassData[] = [
   {
     name: 'Adventurer',
     color: 0x4a9eff,
-    maxHp: 100, speed: 105, attackDamage: 25, attackRange: 48, attackRate: 450,
+    maxHp: 100, speed: 137, attackDamage: 25, attackRange: 48, attackRate: 450,
     weaponName: 'Daggers',
     spriteKey: 'adventurer',
     scale: 1.521, flipForLeft: false,
