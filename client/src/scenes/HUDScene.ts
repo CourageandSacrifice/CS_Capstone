@@ -572,6 +572,28 @@ export class HUDScene extends Phaser.Scene {
     const secs = this.timeRemaining % 60;
     this.timerText.setText(`${mins}:${secs.toString().padStart(2, '0')}`);
     this.timerText.setColor(this.timeRemaining <= 30 ? '#ff4444' : '#ffffff');
+    if (this.timeRemaining === 120) this.showTimerWarning('2 MINUTES REMAINING');
+  }
+
+  private showTimerWarning(message: string): void {
+    const { width, height } = this.scale;
+    const txt = this.add.text(width / 2, height / 2 - 60, message, {
+      fontFamily: 'Courier New, monospace',
+      fontSize: '32px',
+      color: '#ff4444',
+      fontStyle: 'bold',
+      stroke: '#000000',
+      strokeThickness: 6,
+    }).setOrigin(0.5).setDepth(150).setAlpha(0);
+
+    this.tweens.add({
+      targets: txt,
+      alpha: 1,
+      duration: 200,
+      yoyo: true,
+      hold: 1800,
+      onComplete: () => txt.destroy(),
+    });
   }
 
   private createButton(

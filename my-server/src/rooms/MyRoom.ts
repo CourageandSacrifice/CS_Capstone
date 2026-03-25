@@ -176,9 +176,12 @@ export class MyRoom extends Room {
       this.state.gameEndTime = Date.now() + GAME_DURATION;
       this.state.timeRemaining = GAME_DURATION_SECS;
       this.autoEndTimer = this.clock.setTimeout(() => this.triggerEndGame(true), GAME_DURATION);
-      this.tickInterval = this.clock.setInterval(() => {
-        if (this.state.timeRemaining > 0) this.state.timeRemaining--;
-      }, 1000);
+      // Delay tick by 4s to match client countdown so HUD shows 5:00 on reveal
+      this.clock.setTimeout(() => {
+        this.tickInterval = this.clock.setInterval(() => {
+          if (this.state.timeRemaining > 0) this.state.timeRemaining--;
+        }, 1000);
+      }, 4000);
       let i = 0;
       this.state.players.forEach((player) => {
         const spawn = gameSpawnPoint();
