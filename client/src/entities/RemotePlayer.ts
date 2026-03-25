@@ -99,8 +99,8 @@ export class RemotePlayer {
   }
 
   takeDamageFlash(): void {
-    this.body.setTint(0xff0000);
-    this.sprite.scene.time.delayedCall(100, () => {
+    this.body.setTint(0xff4444);
+    this.sprite.scene.time.delayedCall(250, () => {
       this.body.clearTint();
     });
   }
