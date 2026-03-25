@@ -21,4 +21,5 @@ export class MyRoomState extends Schema {
   @type("string") roomCode: string = "";
   @type("string") hostSessionId: string = "";
   @type("number") gameEndTime: number = 0;
+  @type("boolean") timeLimitReached: boolean = false;
 }

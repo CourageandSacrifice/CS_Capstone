@@ -170,9 +170,9 @@ export class MyRoom extends Room {
       if (this.state.phase !== "waiting") return;
       this.state.phase = "playing";
       this.lock(); // block new joins
-      const GAME_DURATION = 184000; // 3 min + ~4s countdown buffer
+      const GAME_DURATION = 304000; // 5 min + ~4s countdown buffer
       this.state.gameEndTime = Date.now() + GAME_DURATION;
-      this.autoEndTimer = this.clock.setTimeout(() => this.triggerEndGame(), GAME_DURATION);
+      this.autoEndTimer = this.clock.setTimeout(() => this.triggerEndGame(true), GAME_DURATION);
       let i = 0;
       this.state.players.forEach((player) => {
         const spawn = gameSpawnPoint();
@@ -185,13 +185,15 @@ export class MyRoom extends Room {
     },
   }
 
-  private triggerEndGame(): void {
+  private triggerEndGame(timeLimitReached = false): void {
+    this.state.timeLimitReached = timeLimitReached;
     this.state.gameOver = true;
     this.state.gameEndTime = 0;
 
     // After 5s, reset room to waiting instead of disconnecting
     this.clock.setTimeout(() => {
       this.state.gameOver = false;
+      this.state.timeLimitReached = false;
       this.state.phase = "waiting";
       this.unlock(); // allow new players to join again
       this.state.players.forEach((player) => {

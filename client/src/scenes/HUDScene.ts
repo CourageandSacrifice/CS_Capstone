@@ -214,8 +214,8 @@ export class HUDScene extends Phaser.Scene {
     this.gameScene.events.on('playerKillsChanged', (kills: number) => {
       this.killText.setText(`${kills}`);
     });
-    this.gameScene.events.on('gameOver', (scores: { name: string; kills: number; deaths: number }[]) => {
-      this.showGameOverScreen(scores);
+    this.gameScene.events.on('gameOver', (scores: { name: string; kills: number; deaths: number }[], timeLimitReached: boolean) => {
+      this.showGameOverScreen(scores, timeLimitReached);
     });
     this.gameScene.events.on('gameEndTimeSet', (endTime: number) => {
       this.gameEndTime = endTime;
@@ -541,7 +541,7 @@ export class HUDScene extends Phaser.Scene {
     this.timerText = this.add.text(
       this.minimapX + this.MINIMAP_W / 2,
       this.MINIMAP_Y + this.MINIMAP_H + 14,
-      '3:00',
+      '5:00',
       {
         fontFamily: 'Courier New, monospace',
         fontSize: '26px',
@@ -624,7 +624,7 @@ export class HUDScene extends Phaser.Scene {
     return container;
   }
 
-  private showGameOverScreen(scores: { name: string; kills: number; deaths: number }[]): void {
+  private showGameOverScreen(scores: { name: string; kills: number; deaths: number }[], timeLimitReached = false): void {
     const { width, height } = this.scale;
     const cx = width / 2; const cy = height / 2;
 
@@ -642,9 +642,17 @@ export class HUDScene extends Phaser.Scene {
       fontStyle: 'bold', stroke: '#000000', strokeThickness: 8,
     }).setOrigin(0.5).setDepth(201);
 
+    if (timeLimitReached) {
+      this.add.text(cx, cy - 100, 'TIME LIMIT REACHED', {
+        fontFamily: 'Courier New, monospace', fontSize: '18px', color: '#ff8c00',
+        fontStyle: 'bold', stroke: '#000000', strokeThickness: 4,
+      }).setOrigin(0.5).setDepth(201);
+    }
+
     // Winner banner
+    const winnerY = timeLimitReached ? cy - 72 : cy - 90;
     if (scores.length > 0) {
-      this.add.text(cx, cy - 90, `★  ${scores[0].name}  WINS  ★`, {
+      this.add.text(cx, winnerY, `★  ${scores[0].name}  WINS  ★`, {
         fontFamily: 'Courier New, monospace', fontSize: '22px', color: '#f5c518',
         fontStyle: 'bold', stroke: '#000000', strokeThickness: 4,
       }).setOrigin(0.5).setDepth(201);
