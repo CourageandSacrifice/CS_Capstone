@@ -3,6 +3,37 @@ import { createRoom, joinAnyRoom, joinRoom } from './network/Network';
 
 const delay = (ms: number): Promise<void> => new Promise(r => setTimeout(r, ms));
 
+function playMenuClick(): void {
+  const audio = new Audio('/audio/menu_hover.mp3');
+  audio.volume = 0.6;
+  audio.play().catch(() => {});
+}
+
+const bgMusic = new Audio('/audio/music.mp3');
+bgMusic.loop = true;
+bgMusic.volume = 0.4;
+
+function startMusic(): void {
+  if (!bgMusic.paused) return;
+  bgMusic.play().catch(() => {});
+}
+
+export function stopMusic(): void {
+  bgMusic.pause();
+  bgMusic.currentTime = 0;
+}
+
+// Try immediately; if browser blocks it, unlock on first interaction
+bgMusic.play().catch(() => {
+  const unlock = () => {
+    bgMusic.play().catch(() => {});
+    document.removeEventListener('click', unlock);
+    document.removeEventListener('keydown', unlock);
+  };
+  document.addEventListener('click', unlock);
+  document.addEventListener('keydown', unlock);
+});
+
 
 const USERNAME_KEY = 'cc_username';
 const CHARACTER_KEY = 'cc_character';
@@ -47,7 +78,7 @@ function showLogin(resolve: (r: LobbyResult) => void): void {
     showLobby(name, resolve);
   };
 
-  btn.addEventListener('click', submit);
+  btn.addEventListener('click', () => { playMenuClick(); submit(); });
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
   setTimeout(() => input.focus(), 50);
 }
@@ -120,6 +151,7 @@ function buildLockerGrid(
     card.append(canvas, nameEl, catEl);
 
     card.addEventListener('click', () => {
+      playMenuClick();
       grid.querySelectorAll('.char-card').forEach(c => c.classList.remove('selected'));
       card.classList.add('selected');
       onSelect(char);
@@ -140,9 +172,11 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void): void {
   avatarEl.textContent = username.slice(0, 2).toUpperCase();
   screen.classList.remove('hidden');
 
+
   // Change username button — clears stored name and reloads to login screen
   const changeUserBtn = document.getElementById('change-user-btn')!;
   changeUserBtn.addEventListener('click', () => {
+    playMenuClick();
     localStorage.removeItem(USERNAME_KEY);
     window.location.reload();
   });
@@ -164,6 +198,7 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void): void {
   let lockerBuilt = false;
 
   navLobby.addEventListener('click', () => {
+    playMenuClick();
     navLobby.classList.add('active');
     navLocker.classList.remove('active');
     lobbyStage.classList.remove('hidden');
@@ -171,6 +206,7 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void): void {
   });
 
   navLocker.addEventListener('click', () => {
+    playMenuClick();
     navLocker.classList.add('active');
     navLobby.classList.remove('active');
     lobbyStage.classList.add('hidden');
@@ -212,6 +248,7 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void): void {
 
   // ── Mode switching ──
   hostBtn.addEventListener('click', () => {
+    playMenuClick();
     mode = 'host';
     hostBtn.classList.add('active');
     joinBtn.classList.remove('active');
@@ -221,6 +258,7 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void): void {
   });
 
   joinBtn.addEventListener('click', () => {
+    playMenuClick();
     mode = 'join';
     joinBtn.classList.add('active');
     hostBtn.classList.remove('active');
@@ -236,12 +274,14 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void): void {
 
   // ── Host: public / private ──
   publicBtn.addEventListener('click', () => {
+    playMenuClick();
     isPrivate = false;
     publicBtn.classList.add('active');
     privateBtn.classList.remove('active');
   });
 
   privateBtn.addEventListener('click', () => {
+    playMenuClick();
     isPrivate = true;
     privateBtn.classList.add('active');
     publicBtn.classList.remove('active');
@@ -251,6 +291,7 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void): void {
   const mpBtns = [5, 10, 20, 30].map(n => document.getElementById(`mp-${n}`)!);
   mpBtns.forEach(btn => {
     btn.addEventListener('click', () => {
+      playMenuClick();
       maxPlayers = Number(btn.id.replace('mp-', ''));
       mpBtns.forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
@@ -264,6 +305,7 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void): void {
 
   // ── Join: random / enter code ──
   randomBtn.addEventListener('click', () => {
+    playMenuClick();
     roomCode = '';
     randomBtn.classList.add('active');
     codeBtn.classList.remove('active');
@@ -273,6 +315,7 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void): void {
   });
 
   codeBtn.addEventListener('click', () => {
+    playMenuClick();
     randomBtn.classList.remove('active');
     codeBtn.classList.add('active');
     roomCodeInput.classList.remove('hidden');
@@ -287,6 +330,7 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void): void {
 
   // ── Play ──
   playBtn.addEventListener('click', async () => {
+    playMenuClick();
     if (mode === 'join' && codeBtn.classList.contains('active') && !roomCode) {
       roomCodeInput.classList.add('shake');
       setTimeout(() => roomCodeInput.classList.remove('shake'), 400);

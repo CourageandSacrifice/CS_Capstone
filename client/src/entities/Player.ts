@@ -228,6 +228,8 @@ export class Player {
       this.dashRechargeCooldown = this.dashCharges === 0 ? 7000 : 3000;
     }
 
+    this.scene.sound.play('sfx_dash', { volume: 0.8 });
+
     // Flash white
     this.body.setTint(0xffffff);
     this.scene.time.delayedCall(100, () => {
@@ -247,6 +249,7 @@ export class Player {
 
     // Immediate local slash visual (no round-trip needed)
     drawSlash(this.scene, this.sprite.x, this.sprite.y, this.facingX, this.facingY);
+    this.scene.sound.play('sfx_attack', { volume: 0.6 });
 
     // Notify server to broadcast swing visual to others
     sendSwingFn(this.facingX, this.facingY);
