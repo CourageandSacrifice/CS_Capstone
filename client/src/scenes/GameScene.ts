@@ -54,6 +54,13 @@ export class GameScene extends Phaser.Scene {
       }
     }
     this.load.image('campus-map', '/campus-map.png');
+
+    this.load.audio('sfx_attack',    '/audio/attack.mp3');
+    this.load.audio('sfx_dash',      '/audio/dash.mp3');
+    this.load.audio('sfx_hit',       '/audio/hit.mp3');
+    this.load.audio('sfx_dead',      '/audio/dead.mp3');
+    this.load.audio('sfx_countdown', '/audio/countdown.mp3');
+    this.load.audio('sfx_menu',      '/audio/menu_hover.mp3');
   }
 
   init(data?: { classData?: ClassData }): void {
@@ -62,6 +69,19 @@ export class GameScene extends Phaser.Scene {
 
   create(): void {
     this.createCharacterAnimations();
+
+    // Build walkability bitmask now — image is guaranteed decoded after preload
+    const tex = this.textures.get('campus-map');
+    const src = tex.getSourceImage() as HTMLImageElement;
+    const offscreen = document.createElement('canvas');
+    offscreen.width = src.naturalWidth;
+    offscreen.height = src.naturalHeight;
+    const ctx = offscreen.getContext('2d')!;
+    ctx.drawImage(src, 0, 0);
+    setBitmask(buildBitmaskFromImageData(
+      ctx.getImageData(0, 0, offscreen.width, offscreen.height),
+      offscreen.width, offscreen.height,
+    ));
 
     // Start in waiting room (20×20 tiles)
     const waitW = 20 * TILE_SIZE;
@@ -188,6 +208,7 @@ export class GameScene extends Phaser.Scene {
           this.events.emit('playerHpChanged', playerState.hp, playerState.maxHp);
           if (playerState.hp < prevHp) {
             this.player.takeDamage(0); // flash only, no additional HP reduction
+            this.sound.play('sfx_hit', { volume: 0.7 });
           }
         });
 
@@ -213,6 +234,7 @@ export class GameScene extends Phaser.Scene {
           if (!playerState.alive) {
             this.player.playDeath();
             this.showEliminatedOverlay();
+            this.sound.play('sfx_dead', { volume: 0.8 });
           } else {
             this.player.playRespawn();
             this.hideEliminatedOverlay();
@@ -453,22 +475,6 @@ export class GameScene extends Phaser.Scene {
     img.setDisplaySize(worldW, worldH);
     img.setDepth(0);
     this.campusMapGraphics = img;
-
-    // Build pixel-perfect collision bitmask from image pixel data
-    const tex = this.textures.get('campus-map');
-    const src = tex.getSourceImage() as HTMLImageElement;
-    if (src.naturalWidth > 100) {
-      const offscreen = document.createElement('canvas');
-      offscreen.width = src.naturalWidth;
-      offscreen.height = src.naturalHeight;
-      const ctx = offscreen.getContext('2d')!;
-      ctx.drawImage(src, 0, 0);
-      setBitmask(buildBitmaskFromImageData(
-        ctx.getImageData(0, 0, offscreen.width, offscreen.height),
-        offscreen.width, offscreen.height,
-      ));
-    }
-
   }
 
   update(time: number, delta: number): void {
