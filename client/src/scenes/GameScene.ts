@@ -306,7 +306,7 @@ export class GameScene extends Phaser.Scene {
         if (kdB !== kdA) return kdB - kdA;
         return b.kills - a.kills;
       });
-      this.events.emit('gameOver', scores);
+      this.events.emit('gameOver', scores, state.timeLimitReached ?? false);
     });
 
     room.onMessage('killed', (data: { victimId: string; killerId: string }) => {
