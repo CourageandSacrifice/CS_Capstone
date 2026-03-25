@@ -54,6 +54,7 @@ export class MyRoom extends Room {
   private hostId = '';
   private joinOrder: string[] = []; // tracks join order for host migration
   private autoEndTimer?: ReturnType<typeof this.clock.setTimeout>;
+  private tickInterval?: ReturnType<typeof this.clock.setInterval>;
 
   private transferHost(): void {
     const next = this.joinOrder[0];
@@ -171,8 +172,13 @@ export class MyRoom extends Room {
       this.state.phase = "playing";
       this.lock(); // block new joins
       const GAME_DURATION = 304000; // 5 min + ~4s countdown buffer
+      const GAME_DURATION_SECS = 300;
       this.state.gameEndTime = Date.now() + GAME_DURATION;
+      this.state.timeRemaining = GAME_DURATION_SECS;
       this.autoEndTimer = this.clock.setTimeout(() => this.triggerEndGame(true), GAME_DURATION);
+      this.tickInterval = this.clock.setInterval(() => {
+        if (this.state.timeRemaining > 0) this.state.timeRemaining--;
+      }, 1000);
       let i = 0;
       this.state.players.forEach((player) => {
         const spawn = gameSpawnPoint();
@@ -186,9 +192,11 @@ export class MyRoom extends Room {
   }
 
   private triggerEndGame(timeLimitReached = false): void {
+    if (this.tickInterval) { this.tickInterval.clear(); this.tickInterval = undefined; }
     this.state.timeLimitReached = timeLimitReached;
     this.state.gameOver = true;
     this.state.gameEndTime = 0;
+    this.state.timeRemaining = 0;
 
     // After 5s, reset room to waiting instead of disconnecting
     this.clock.setTimeout(() => {

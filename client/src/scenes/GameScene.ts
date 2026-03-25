@@ -317,8 +317,8 @@ export class GameScene extends Phaser.Scene {
       this.events.emit('hostChanged', value);
     });
 
-    $(state).listen('gameEndTime', (value: number) => {
-      if (value > 0) this.events.emit('gameEndTimeSet', value);
+    $(state).listen('timeRemaining', (value: number) => {
+      this.events.emit('timeRemainingUpdated', value);
     });
 
     $(state).listen('gameOver', () => {

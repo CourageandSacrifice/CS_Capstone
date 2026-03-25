@@ -32,8 +32,7 @@ export class HUDScene extends Phaser.Scene {
   private currentRoomCode = '';
   private waitingPlayerCount = 0;
   private timerText?: Phaser.GameObjects.Text;
-  private timerEvent?: Phaser.Time.TimerEvent;
-  private gameEndTime = 0;
+  private timeRemaining = 0;
 
   // Waiting room UI
   private waitingTitle!: Phaser.GameObjects.Text;
@@ -218,9 +217,9 @@ export class HUDScene extends Phaser.Scene {
     this.gameScene.events.on('gameOver', (scores: { name: string; kills: number; deaths: number }[], timeLimitReached: boolean) => {
       this.showGameOverScreen(scores, timeLimitReached);
     });
-    this.gameScene.events.on('gameEndTimeSet', (endTime: number) => {
-      this.gameEndTime = endTime;
-      this.startTimer();
+    this.gameScene.events.on('timeRemainingUpdated', (secs: number) => {
+      this.timeRemaining = secs;
+      this.updateTimerDisplay();
     });
     this.gameScene.events.on('gameStarted', () => {
       this.switchToGameHUD();
@@ -474,9 +473,8 @@ export class HUDScene extends Phaser.Scene {
     this.killText.setVisible(false);
     this.mmContainer.setVisible(false);
     if (this.endGameBtn) { this.endGameBtn.destroy(); this.endGameBtn = undefined; }
-    if (this.timerEvent) { this.timerEvent.destroy(); this.timerEvent = undefined; }
     if (this.timerText) { this.timerText.destroy(); this.timerText = undefined; }
-    this.gameEndTime = 0;
+    this.timeRemaining = 0;
 
     // Show waiting room UI
     this.waitingTitle.setVisible(true);
@@ -556,8 +554,8 @@ export class HUDScene extends Phaser.Scene {
       },
     ).setOrigin(1, 0.5).setDepth(10);
 
-    // If gameEndTime already arrived before this HUD was revealed, start timer now
-    if (this.gameEndTime > 0) this.startTimer();
+    // If timeRemaining already arrived before the HUD was revealed, display it now
+    if (this.timeRemaining > 0) this.updateTimerDisplay();
 
     if (this.isHost) {
       this.endGameBtn = this.createButton(width - 116, this.MINIMAP_Y + this.MINIMAP_H + 8, 'END GAME', 0x880000, () => {
@@ -568,21 +566,12 @@ export class HUDScene extends Phaser.Scene {
     }
   }
 
-  private startTimer(): void {
-    if (this.timerEvent) { this.timerEvent.destroy(); this.timerEvent = undefined; }
+  private updateTimerDisplay(): void {
     if (!this.timerText) return;
-
-    const tick = () => {
-      if (!this.timerText) return;
-      const remaining = Math.max(0, Math.ceil((this.gameEndTime - Date.now()) / 1000));
-      const mins = Math.floor(remaining / 60);
-      const secs = remaining % 60;
-      this.timerText.setText(`${mins}:${secs.toString().padStart(2, '0')}`);
-      this.timerText.setColor(remaining <= 30 ? '#ff4444' : '#ffffff');
-    };
-
-    tick(); // immediate first render
-    this.timerEvent = this.time.addEvent({ delay: 1000, loop: true, callback: tick });
+    const mins = Math.floor(this.timeRemaining / 60);
+    const secs = this.timeRemaining % 60;
+    this.timerText.setText(`${mins}:${secs.toString().padStart(2, '0')}`);
+    this.timerText.setColor(this.timeRemaining <= 30 ? '#ff4444' : '#ffffff');
   }
 
   private createButton(
@@ -638,8 +627,7 @@ export class HUDScene extends Phaser.Scene {
     const { width, height } = this.scale;
     const cx = width / 2; const cy = height / 2;
 
-    // Stop timer
-    if (this.timerEvent) { this.timerEvent.destroy(); this.timerEvent = undefined; }
+    // Remove timer display
     if (this.timerText) { this.timerText.destroy(); this.timerText = undefined; }
 
     const overlay = this.add.graphics();
