@@ -23,7 +23,7 @@ export const CHARACTERS: ClassData[] = [
     maxHp: 100, speed: 105, attackDamage: 25, attackRange: 48, attackRate: 450,
     weaponName: 'Daggers',
     spriteKey: 'adventurer',
-    scale: 0.78, flipForLeft: false,
+    scale: 1.521, flipForLeft: false,
     defaultTexture: 'adventurer_idle_down',
     frameWidth: 96, frameHeight: 80,
   },

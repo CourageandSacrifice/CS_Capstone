@@ -28,8 +28,8 @@ Campus Clash is a top-down multiplayer arena game set on a college campus. Playe
   - Org/team ID: `team_Mphd4bwb4tIzNdGBe1NbUbhA`
 - **Backend → AWS EC2** — deployed via Docker + SSH (`my-server/`)
   - Production URL: `wss://campusclash.duckdns.org`
-  - Domain: DuckDNS (`campusclash.duckdns.org`) → EC2 IP `18.208.196.236`
-  - Instance: SSH as `ubuntu`, port 2567
+  - Domain: DuckDNS (`campusclash.duckdns.org`) → EC2 IP `18.226.163.181` (us-east-2)
+  - Instance: SSH as `ubuntu` via `ssh -i "campus-server.pem" ubuntu@ec2-18-226-163-181.us-east-2.compute.amazonaws.com`, port 2567
   - Deploy: SSH in, git pull, docker build + run (see Key Commands)
 
 ---
@@ -67,7 +67,7 @@ npm run dev
 ## Deploying the Server
 
 ```bash
-ssh -i ~/your-key.pem ubuntu@18.208.196.236
+ssh -i "campus-server.pem" ubuntu@ec2-18-226-163-181.us-east-2.compute.amazonaws.com
 cd Campus-Clash/my-server
 git pull
 docker build -t campus-clash .
@@ -186,6 +186,6 @@ Campus Clash/
 | Deploy frontend | `cd client && vercel --prod` |
 | Deploy server | SSH in + docker build + run (see Deploying the Server) |
 | Check server logs | `docker logs campus-clash-app --tail 50` (on EC2) |
-| SSH into server | `ssh -i ~/your-key.pem ubuntu@18.208.196.236` |
+| SSH into server | `ssh -i "campus-server.pem" ubuntu@ec2-18-226-163-181.us-east-2.compute.amazonaws.com` |
 | Login to Vercel | `vercel login` |
 

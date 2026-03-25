@@ -18,9 +18,9 @@ const MAP_H = 100;
 const WORLD_W = MAP_W * TILE_SIZE;
 const WORLD_H = MAP_H * TILE_SIZE;
 
-// Safe spawn zone: open corridor right of Round Table (right edge tile 67) and above Main Hall (top tile 68).
-// Clear of all buildings — pixel coords ~1088–1328 x, ~848–1072 y.
-const SPAWN_ZONE = { xMin: 68, xMax: 82, yMin: 53, yMax: 67 };
+// Safe spawn zone: true center of map (tile 75,50), clear of all buildings.
+// Clear of all buildings — pixel coords ~1088–1328 x, ~704–928 y.
+const SPAWN_ZONE = { xMin: 68, xMax: 82, yMin: 44, yMax: 58 };
 
 function gameSpawnPoint(): { x: number; y: number } {
   const tx = SPAWN_ZONE.xMin + Math.floor(Math.random() * (SPAWN_ZONE.xMax - SPAWN_ZONE.xMin + 1));

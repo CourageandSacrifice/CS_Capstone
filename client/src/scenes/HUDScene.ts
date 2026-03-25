@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { ClassData, CHARACTERS } from '../data/Classes';
 import type { GameScene } from './GameScene';
 import { joinRoom, reconnect, hasReconnectionToken, clearReconnectionData, leaveRoom, getRoom, sendStartGame } from '../network/Network';
-import { MAP_W, MAP_H, TILE_SIZE, BUILDINGS } from '../map/CampusMap';
+import { MAP_W, MAP_H, TILE_SIZE } from '../map/CampusMap';
 
 export class HUDScene extends Phaser.Scene {
   private classData!: ClassData;
@@ -154,26 +154,24 @@ export class HUDScene extends Phaser.Scene {
 
     // Minimap container (hidden until game starts)
     this.minimapX = width - this.MINIMAP_W - 10;
-    const mmBg = this.add.graphics();
-    mmBg.fillStyle(0x000000, 0.6);
-    mmBg.fillRect(this.minimapX, this.MINIMAP_Y, this.MINIMAP_W, this.MINIMAP_H);
-    for (const b of BUILDINGS) {
-      const bx = this.minimapX + (b.x / MAP_W) * this.MINIMAP_W;
-      const by = this.MINIMAP_Y + (b.y / MAP_H) * this.MINIMAP_H;
-      const bw = (b.w / MAP_W) * this.MINIMAP_W;
-      const bh = (b.h / MAP_H) * this.MINIMAP_H;
-      mmBg.fillStyle(b.color, 0.85);
-      mmBg.fillRect(bx, by, bw, bh);
-    }
-    mmBg.lineStyle(1, 0xffffff, 0.35);
-    mmBg.strokeRect(this.minimapX, this.MINIMAP_Y, this.MINIMAP_W, this.MINIMAP_H);
+    const mmImg = this.add.image(
+      this.minimapX + this.MINIMAP_W / 2,
+      this.MINIMAP_Y + this.MINIMAP_H / 2,
+      'campus-map',
+    );
+    mmImg.setDisplaySize(this.MINIMAP_W, this.MINIMAP_H);
+    mmImg.setDepth(9);
+
+    const mmBorder = this.add.graphics();
+    mmBorder.lineStyle(1, 0xffffff, 0.35);
+    mmBorder.strokeRect(this.minimapX, this.MINIMAP_Y, this.MINIMAP_W, this.MINIMAP_H);
     const mmLabel = this.add.text(this.minimapX + this.MINIMAP_W / 2, this.MINIMAP_Y + 3, 'MAP', {
       fontFamily: 'Courier New, monospace',
       fontSize: '10px',
       color: '#aaaaaa',
     }).setOrigin(0.5, 0);
     this.minimapDots = this.add.graphics();
-    this.mmContainer = this.add.container(0, 0, [mmBg, mmLabel, this.minimapDots]);
+    this.mmContainer = this.add.container(0, 0, [mmImg, mmBorder, mmLabel, this.minimapDots]);
     this.mmContainer.setVisible(false);
 
     // Return to lobby button (always visible)
@@ -347,6 +345,7 @@ export class HUDScene extends Phaser.Scene {
       const { width } = this.scale;
       this.startGameBtn = this.createButton(width / 2 - 80, height / 2 + 70, 'START GAME', 0x1a7a3a, () => {
         if (this.waitingPlayerCount < 2) return;
+        this.gameScene.setCountdownActive(true); // stop position sends before startGame message
         sendStartGame();
         if (this.startGameBtn) this.startGameBtn.setVisible(false);
       }, 160, 52);
@@ -489,6 +488,7 @@ export class HUDScene extends Phaser.Scene {
       const { width, height } = this.scale;
       this.startGameBtn = this.createButton(width / 2 - 80, height / 2 + 70, 'START GAME', 0x1a7a3a, () => {
         if (this.waitingPlayerCount < 2) return;
+        this.gameScene.setCountdownActive(true); // stop position sends before startGame message
         sendStartGame();
         if (this.startGameBtn) this.startGameBtn.setVisible(false);
       }, 160, 52);
@@ -513,6 +513,7 @@ export class HUDScene extends Phaser.Scene {
         const { width, height } = this.scale;
         this.startGameBtn = this.createButton(width / 2 - 80, height / 2 + 70, 'START GAME', 0x1a7a3a, () => {
           if (this.waitingPlayerCount < 2) return;
+          this.gameScene.setCountdownActive(true); // stop position sends before startGame message
           sendStartGame();
           if (this.startGameBtn) this.startGameBtn.setVisible(false);
         }, 160, 52);

@@ -1,12 +1,12 @@
 import Phaser from 'phaser';
 import {
-  MAP_DATA,
   TILE_SIZE,
-  TILE,
   MAP_W,
   MAP_H,
   setGamePhase,
-  BUILDINGS,
+  setBitmask,
+  buildBitmaskFromImageData,
+  findSafeSpawn,
 } from '../map/CampusMap';
 import { ClassData, DEFAULT_CLASS, CHARACTERS } from '../data/Classes';
 import { Player } from '../entities/Player';
@@ -35,7 +35,8 @@ export class GameScene extends Phaser.Scene {
   private eliminatedText?: Phaser.GameObjects.Text;
   private eliminatedOverlay?: Phaser.GameObjects.Graphics;
   private mapLayer?: Phaser.GameObjects.Graphics;
-  private campusMapGraphics?: Phaser.GameObjects.Graphics;
+  private campusMapGraphics?: Phaser.GameObjects.Graphics | Phaser.GameObjects.Image;
+  private buildingImages: Phaser.GameObjects.Image[] = [];
   private gamePhase: 'waiting' | 'playing' = 'waiting';
   private countdownActive = false;
 
@@ -52,6 +53,7 @@ export class GameScene extends Phaser.Scene {
           { frameWidth: 96, frameHeight: 80 });
       }
     }
+    this.load.image('campus-map', '/campus-map.png');
   }
 
   init(data?: { classData?: ClassData }): void {
@@ -145,16 +147,22 @@ export class GameScene extends Phaser.Scene {
     const worldW = MAP_W * TILE_SIZE;
     const worldH = MAP_H * TILE_SIZE;
     this.cameras.main.setBounds(0, 0, worldW, worldH);
-    this.cameras.main.setZoom(this.cameras.main.width / (40 * TILE_SIZE));
+    this.cameras.main.setZoom(this.cameras.main.width / (60 * TILE_SIZE));
 
-    // Sync local player to server-assigned spawn position
-    if (this.room) {
-      const myState = (this.room.state as any).players.get(this.room.sessionId);
-      if (myState) {
-        this.player.sprite.x = myState.x;
-        this.player.sprite.y = myState.y;
+    // Sync local player to server-assigned spawn, snapped to nearest walkable tile.
+    // Use a delayedCall(0) as backup so position is read after all state patches settle.
+    const syncSpawn = () => {
+      if (this.room) {
+        const myState = (this.room.state as any).players.get(this.room.sessionId);
+        if (myState) {
+          const safe = findSafeSpawn(myState.x, myState.y);
+          this.player.sprite.x = safe.x;
+          this.player.sprite.y = safe.y;
+        }
       }
-    }
+    };
+    syncSpawn();
+    this.time.delayedCall(0, syncSpawn);
 
     this.events.emit('gameStarted');
   }
@@ -208,8 +216,9 @@ export class GameScene extends Phaser.Scene {
           } else {
             this.player.playRespawn();
             this.hideEliminatedOverlay();
-            this.player.sprite.x = playerState.x;
-            this.player.sprite.y = playerState.y;
+            const safe = findSafeSpawn(playerState.x, playerState.y);
+            this.player.sprite.x = safe.x;
+            this.player.sprite.y = safe.y;
             // Re-attach camera to local player after respawn (may have been following killer)
             this.cameras.main.startFollow(this.player.sprite, true, 0.1, 0.1);
           }
@@ -338,6 +347,9 @@ export class GameScene extends Phaser.Scene {
       this.campusMapGraphics = undefined;
     }
 
+    this.buildingImages.forEach(img => img.destroy());
+    this.buildingImages = [];
+
     // Redraw waiting room
     this.drawWaitingRoom();
 
@@ -434,35 +446,29 @@ export class GameScene extends Phaser.Scene {
   }
 
   private drawMap(): void {
-    const g = this.add.graphics();
+    const worldW = MAP_W * TILE_SIZE;
+    const worldH = MAP_H * TILE_SIZE;
 
-    for (let y = 0; y < MAP_H; y++) {
-      for (let x = 0; x < MAP_W; x++) {
-        const tile = MAP_DATA[y][x];
-        let color = 0x4a7c59; // default grass
-        if (tile === TILE.PATH) color = 0x8a7a5a;
-        if (tile === TILE.BUILDING) {
-          // match building color by position
-          for (const b of BUILDINGS) {
-            if (x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h) {
-              color = b.color;
-              break;
-            }
-          }
-        }
-        if (tile === TILE.FIELD) color = 0x2d8a4e;
-        g.fillStyle(color, 1);
-        g.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-      }
+    const img = this.add.image(worldW / 2, worldH / 2, 'campus-map');
+    img.setDisplaySize(worldW, worldH);
+    img.setDepth(0);
+    this.campusMapGraphics = img;
+
+    // Build pixel-perfect collision bitmask from image pixel data
+    const tex = this.textures.get('campus-map');
+    const src = tex.getSourceImage() as HTMLImageElement;
+    if (src.naturalWidth > 100) {
+      const offscreen = document.createElement('canvas');
+      offscreen.width = src.naturalWidth;
+      offscreen.height = src.naturalHeight;
+      const ctx = offscreen.getContext('2d')!;
+      ctx.drawImage(src, 0, 0);
+      setBitmask(buildBitmaskFromImageData(
+        ctx.getImageData(0, 0, offscreen.width, offscreen.height),
+        offscreen.width, offscreen.height,
+      ));
     }
 
-    // Subtle grid lines
-    g.lineStyle(1, 0x000000, 0.06);
-    for (let y = 0; y <= MAP_H; y++) g.lineBetween(0, y * TILE_SIZE, MAP_W * TILE_SIZE, y * TILE_SIZE);
-    for (let x = 0; x <= MAP_W; x++) g.lineBetween(x * TILE_SIZE, 0, x * TILE_SIZE, MAP_H * TILE_SIZE);
-
-    g.setDepth(0);
-    this.campusMapGraphics = g;
   }
 
   update(time: number, delta: number): void {
