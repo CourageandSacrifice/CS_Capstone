@@ -5,7 +5,6 @@ import {
   MAP_H,
   setGamePhase,
   setBitmask,
-  getBitmask,
   buildBitmaskFromImageData,
   findSafeSpawn,
 } from '../map/CampusMap';
@@ -40,9 +39,6 @@ export class GameScene extends Phaser.Scene {
   private buildingImages: Phaser.GameObjects.Image[] = [];
   private gamePhase: 'waiting' | 'playing' = 'waiting';
   private countdownActive = false;
-  private collisionLayer?: Phaser.GameObjects.Graphics;
-  private collisionVisible = false;
-  private cKey!: Phaser.Input.Keyboard.Key;
 
   constructor() {
     super('GameScene');
@@ -113,7 +109,6 @@ export class GameScene extends Phaser.Scene {
     };
     this.spaceKey = kb.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     this.attackKey = kb.addKey(Phaser.Input.Keyboard.KeyCodes.O);
-    this.cKey = kb.addKey(Phaser.Input.Keyboard.KeyCodes.C);
 
     // HUD
     this.scene.launch('HUDScene', {
@@ -373,11 +368,6 @@ export class GameScene extends Phaser.Scene {
       this.campusMapGraphics.destroy();
       this.campusMapGraphics = undefined;
     }
-    if (this.collisionLayer) {
-      this.collisionLayer.destroy();
-      this.collisionLayer = undefined;
-      this.collisionVisible = false;
-    }
 
     this.buildingImages.forEach(img => img.destroy());
     this.buildingImages = [];
@@ -487,31 +477,6 @@ export class GameScene extends Phaser.Scene {
     this.campusMapGraphics = img;
   }
 
-  private toggleCollisionView(): void {
-    if (this.collisionVisible) {
-      this.collisionLayer?.destroy();
-      this.collisionLayer = undefined;
-      this.collisionVisible = false;
-      return;
-    }
-    const mask = getBitmask();
-    if (!mask) return;
-    const g = this.add.graphics();
-    g.setDepth(50);
-    for (let ty = 0; ty < MAP_H; ty++) {
-      for (let tx = 0; tx < MAP_W; tx++) {
-        if (mask[ty][tx]) {
-          g.fillStyle(0x00ff00, 0.25);
-        } else {
-          g.fillStyle(0xff0000, 0.25);
-        }
-        g.fillRect(tx * TILE_SIZE, ty * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-      }
-    }
-    this.collisionLayer = g;
-    this.collisionVisible = true;
-  }
-
   update(time: number, delta: number): void {
     if (!this.player.alive) return;
 
@@ -525,11 +490,6 @@ export class GameScene extends Phaser.Scene {
       if (this.gamePhase === 'playing' && Phaser.Input.Keyboard.JustDown(this.attackKey)) {
         this.player.tryAttack(time, this.remotePlayers, sendAttack, sendSwing);
       }
-      if (this.gamePhase === 'playing' && window.location.hostname === 'localhost'
-          && Phaser.Input.Keyboard.JustDown(this.cKey)) {
-        this.toggleCollisionView();
-      }
-
       if (this.room && time - this.lastSendTime > GameScene.SEND_INTERVAL) {
         sendPosition(this.player.x, this.player.y);
         this.lastSendTime = time;
