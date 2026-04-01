@@ -57,6 +57,17 @@ export class MyRoom extends Room {
   private joinOrder: string[] = []; // tracks join order for host migration
   private autoEndTimer?: ReturnType<typeof this.clock.setTimeout>;
   private tickInterval?: ReturnType<typeof this.clock.setInterval>;
+  private emptyRoomTimer?: ReturnType<typeof this.clock.setTimeout>;
+
+  private scheduleEmptyDispose(): void {
+    if (this.emptyRoomTimer) { this.emptyRoomTimer.clear(); this.emptyRoomTimer = undefined; }
+    this.emptyRoomTimer = this.clock.setTimeout(() => {
+      if (this.state.players.size === 0) {
+        console.log(`Room ${this.roomId}: empty for 5 minutes, disposing.`);
+        this.disconnect();
+      }
+    }, 5 * 60 * 1000);
+  }
 
   private transferHost(): void {
     const next = this.joinOrder[0];
@@ -263,6 +274,9 @@ export class MyRoom extends Room {
   }
 
   onJoin (client: Client, options: any) {
+    // Cancel empty-room timer — someone joined
+    if (this.emptyRoomTimer) { this.emptyRoomTimer.clear(); this.emptyRoomTimer = undefined; }
+
     this.joinOrder.push(client.sessionId);
     if (!this.hostId) {
       this.hostId = client.sessionId;
@@ -306,6 +320,7 @@ export class MyRoom extends Room {
       this.state.players.delete(client.sessionId);
       if (wasHost) this.transferHost();
       console.log("Players remaining:", this.state.players.size);
+      if (this.state.players.size === 0) this.scheduleEmptyDispose();
     }
   }
 
@@ -321,9 +336,11 @@ export class MyRoom extends Room {
 
     if (wasHost) this.transferHost();
     console.log(client.sessionId, "left! Players:", this.state.players.size);
+    if (this.state.players.size === 0) this.scheduleEmptyDispose();
   }
 
   onDispose() {
+    if (this.emptyRoomTimer) { this.emptyRoomTimer.clear(); this.emptyRoomTimer = undefined; }
     console.log("room", this.roomId, "disposing...");
   }
 }
