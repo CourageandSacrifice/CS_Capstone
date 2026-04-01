@@ -16,7 +16,7 @@ import { sendPosition, sendAttack, sendSwing, sendEndGame, sendFireball } from '
 import { Room, getStateCallbacks } from '@colyseus/sdk';
 
 interface ActiveProjectile {
-  sprite: Phaser.GameObjects.Image;
+  sprite: Phaser.GameObjects.Sprite;
   dirX: number;
   dirY: number;
   traveled: number;
@@ -42,6 +42,7 @@ export class GameScene extends Phaser.Scene {
     left: Phaser.Input.Keyboard.Key;
     right: Phaser.Input.Keyboard.Key;
   };
+  private arrowKeys!: Phaser.Types.Input.Keyboard.CursorKeys;
   private spaceKey!: Phaser.Input.Keyboard.Key;
   private attackKey!: Phaser.Input.Keyboard.Key;
 
@@ -80,7 +81,7 @@ export class GameScene extends Phaser.Scene {
       }
     }
     this.load.image('campus-map', '/campus-map.png');
-    this.load.image('fireball',        '/fireball.gif');
+    this.load.spritesheet('fireball', '/fireball-sheet.png', { frameWidth: 64, frameHeight: 32 });
     this.load.image('fireball-pickup', '/fireball-pickup.png');
 
     this.load.audio('sfx_attack',    '/audio/attack.mp3');
@@ -97,6 +98,13 @@ export class GameScene extends Phaser.Scene {
 
   create(): void {
     this.createCharacterAnimations();
+
+    this.anims.create({
+      key: 'fireball_fly',
+      frames: this.anims.generateFrameNumbers('fireball', { start: 0, end: 4 }),
+      frameRate: 12,
+      repeat: -1,
+    });
 
     // Build walkability bitmask now — image is guaranteed decoded after preload
     const tex = this.textures.get('campus-map');
@@ -135,6 +143,7 @@ export class GameScene extends Phaser.Scene {
       left: kb.addKey(Phaser.Input.Keyboard.KeyCodes.A),
       right: kb.addKey(Phaser.Input.Keyboard.KeyCodes.D),
     };
+    this.arrowKeys = kb.createCursorKeys();
     this.spaceKey = kb.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     this.attackKey = kb.addKey(Phaser.Input.Keyboard.KeyCodes.O);
     this.pKey = kb.addKey(Phaser.Input.Keyboard.KeyCodes.P);
@@ -525,7 +534,12 @@ export class GameScene extends Phaser.Scene {
 
     // Block all local input during the pre-game countdown
     if (!this.countdownActive) {
-      this.player.update(time, delta, this.cursors);
+      this.player.update(time, delta, {
+        up:    { isDown: this.cursors.up.isDown    || this.arrowKeys.up.isDown    },
+        down:  { isDown: this.cursors.down.isDown  || this.arrowKeys.down.isDown  },
+        left:  { isDown: this.cursors.left.isDown  || this.arrowKeys.left.isDown  },
+        right: { isDown: this.cursors.right.isDown || this.arrowKeys.right.isDown },
+      });
 
       if (Phaser.Input.Keyboard.JustDown(this.spaceKey)) {
         this.player.dash(time);
@@ -573,6 +587,10 @@ export class GameScene extends Phaser.Scene {
 
     // Always interpolate remote players (visible during countdown)
     this.remotePlayers.forEach(rp => rp.interpolate(delta));
+
+    // Y-sort: sprites lower on screen render in front of sprites higher up
+    this.player.sprite.setDepth(this.player.y);
+    this.remotePlayers.forEach(rp => rp.sprite.setDepth(rp.sprite.y));
   }
 
   private spawnPickupItems(): void {
@@ -636,8 +654,9 @@ export class GameScene extends Phaser.Scene {
     const ny = dirY / len;
 
     const angle = Math.atan2(ny, nx) * (180 / Math.PI);
-    const sprite = this.add.image(this.player.x, this.player.y, 'fireball');
-    sprite.setDisplaySize(28, 28).setDepth(12).setAngle(angle);
+    const sprite = this.add.sprite(this.player.x, this.player.y, 'fireball');
+    sprite.setDisplaySize(40, 40).setDepth(12).setAngle(angle);
+    sprite.play('fireball_fly');
 
     this.activeProjectiles.push({
       sprite, dirX: nx, dirY: ny,

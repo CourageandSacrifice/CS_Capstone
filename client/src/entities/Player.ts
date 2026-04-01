@@ -47,10 +47,10 @@ export function drawSlash(
 }
 
 interface CursorKeys {
-  up: Phaser.Input.Keyboard.Key;
-  down: Phaser.Input.Keyboard.Key;
-  left: Phaser.Input.Keyboard.Key;
-  right: Phaser.Input.Keyboard.Key;
+  up: { isDown: boolean };
+  down: { isDown: boolean };
+  left: { isDown: boolean };
+  right: { isDown: boolean };
 }
 
 export class Player {
