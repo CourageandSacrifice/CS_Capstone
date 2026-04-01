@@ -29,7 +29,7 @@ function gameSpawnPoint(): { x: number; y: number } {
 }
 
 const ATTACK_DAMAGE = 20;
-const ATTACK_RANGE = 38;
+const ATTACK_RANGE = 54;
 const ATTACK_RATE = 450;
 const HIT_COOLDOWN = 200; // how often a player can be hit
 const RESPAWN_DELAY = 5000;
@@ -170,6 +170,19 @@ export class MyRoom extends Room {
         dirX,
         dirY,
       });
+    },
+
+    fireballLaunched: (client: Client, message: { x: number; y: number; dirX: number; dirY: number }) => {
+      if (this.state.phase !== 'playing') return;
+      const shooter = this.state.players.get(client.sessionId);
+      if (!shooter || !shooter.alive) return;
+      this.broadcast('fireballEffect', {
+        shooterId: client.sessionId,
+        x: message.x,
+        y: message.y,
+        dirX: message.dirX,
+        dirY: message.dirY,
+      }, { except: client });
     },
 
     fireball: (client: Client, message: { targetId: string; dirX?: number; dirY?: number }) => {
