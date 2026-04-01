@@ -12,8 +12,25 @@ import {
 import { ClassData, DEFAULT_CLASS, CHARACTERS } from '../data/Classes';
 import { Player } from '../entities/Player';
 import { RemotePlayer } from '../entities/RemotePlayer';
-import { sendPosition, sendAttack, sendSwing, sendEndGame } from '../network/Network';
+import { sendPosition, sendAttack, sendSwing, sendEndGame, sendFireball } from '../network/Network';
 import { Room, getStateCallbacks } from '@colyseus/sdk';
+
+interface ActiveProjectile {
+  sprite: Phaser.GameObjects.Image;
+  dirX: number;
+  dirY: number;
+  traveled: number;
+  flickering: boolean;
+  flickerTimer: number;
+}
+
+interface PickupItem {
+  sprite: Phaser.GameObjects.Image;
+  active: boolean;
+  worldX: number;
+  worldY: number;
+  tween?: Phaser.Tweens.Tween;
+}
 
 export class GameScene extends Phaser.Scene {
   player!: Player;
@@ -43,6 +60,14 @@ export class GameScene extends Phaser.Scene {
   private collisionLayer?: Phaser.GameObjects.Graphics;
   private collisionVisible = false;
   private cKey!: Phaser.Input.Keyboard.Key;
+  private pKey!: Phaser.Input.Keyboard.Key;
+  private fireballCount = 0;
+  private readonly MAX_FIREBALLS = 3;
+  private readonly FIREBALL_SPEED = 220;
+  private readonly FIREBALL_RANGE_PX = 240;
+  private readonly FIREBALL_FLICKER_PX = 208;
+  private activeProjectiles: ActiveProjectile[] = [];
+  private pickupItems: PickupItem[] = [];
 
   constructor() {
     super('GameScene');
@@ -58,6 +83,8 @@ export class GameScene extends Phaser.Scene {
       }
     }
     this.load.image('campus-map', '/campus-map.png');
+    this.load.image('fireball',        '/fireball.gif');
+    this.load.image('fireball-pickup', '/fireball-pickup.png');
 
     this.load.audio('sfx_attack',    '/audio/attack.mp3');
     this.load.audio('sfx_dash',      '/audio/dash.mp3');
@@ -114,6 +141,7 @@ export class GameScene extends Phaser.Scene {
     this.spaceKey = kb.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     this.attackKey = kb.addKey(Phaser.Input.Keyboard.KeyCodes.O);
     this.cKey = kb.addKey(Phaser.Input.Keyboard.KeyCodes.C);
+    this.pKey = kb.addKey(Phaser.Input.Keyboard.KeyCodes.P);
 
     // HUD
     this.scene.launch('HUDScene', {
@@ -128,10 +156,16 @@ export class GameScene extends Phaser.Scene {
   onRoomConnected(room: Room): void {
     this.room = room;
 
-    // Wait for the first state sync before setting up listeners
-    room.onStateChange.once((state: any) => {
+    // If the lobby already synced state, set up immediately.
+    // Otherwise wait for the first patch (handles fresh joins where state isn't ready yet).
+    const state = room.state as any;
+    if (state && state.players && state.players.size >= 0) {
       this.setupMultiplayer(room, state);
-    });
+    } else {
+      room.onStateChange.once((s: any) => {
+        this.setupMultiplayer(room, s);
+      });
+    }
   }
 
   private drawWaitingRoom(): void {
@@ -189,6 +223,7 @@ export class GameScene extends Phaser.Scene {
     syncSpawn();
     this.time.delayedCall(0, syncSpawn);
 
+    this.spawnPickupItems();
     this.events.emit('gameStarted');
   }
 
@@ -366,6 +401,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   revertToWaitingRoom(): void {
+    this.activeProjectiles.forEach(p => p.sprite.destroy());
+    this.activeProjectiles = [];
+    this.pickupItems.forEach(p => { p.tween?.stop(); p.sprite.destroy(); });
+    this.pickupItems = [];
+    this.fireballCount = 0;
+    this.events.emit('inventoryChanged', 0);
+
     this.gamePhase = 'waiting';
     this.countdownActive = false;
 
@@ -525,6 +567,9 @@ export class GameScene extends Phaser.Scene {
       if (this.gamePhase === 'playing' && Phaser.Input.Keyboard.JustDown(this.attackKey)) {
         this.player.tryAttack(time, this.remotePlayers, sendAttack, sendSwing);
       }
+      if (this.gamePhase === 'playing' && Phaser.Input.Keyboard.JustDown(this.pKey)) {
+        this.tryFireProjectile();
+      }
       if (this.gamePhase === 'playing' && window.location.hostname === 'localhost'
           && Phaser.Input.Keyboard.JustDown(this.cKey)) {
         this.toggleCollisionView();
@@ -553,7 +598,150 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
+    // Update projectiles
+    if (this.activeProjectiles.length > 0) {
+      this.updateProjectiles(delta);
+    }
+
+    // Pickup collision
+    if (this.gamePhase === 'playing') {
+      this.checkPickupCollisions();
+    }
+
     // Always interpolate remote players (visible during countdown)
     this.remotePlayers.forEach(rp => rp.interpolate(delta));
+  }
+
+  private spawnPickupItems(): void {
+    this.pickupItems.forEach(p => { p.tween?.stop(); p.sprite.destroy(); });
+    this.pickupItems = [];
+
+    for (let i = 0; i < 10; i++) {
+      this.spawnPickupAt(this.randomWalkableTile());
+    }
+  }
+
+  private randomWalkableTile(): { wx: number; wy: number } {
+    const mask = getBitmask();
+    // Fallback if mask not ready
+    if (!mask) {
+      const wx = (80 + Math.random() * 40) * TILE_SIZE;
+      const wy = (40 + Math.random() * 40) * TILE_SIZE;
+      return { wx, wy };
+    }
+    let tx = 0, ty = 0;
+    let attempts = 0;
+    do {
+      tx = Math.floor(Math.random() * MAP_W);
+      ty = Math.floor(Math.random() * MAP_H);
+      attempts++;
+    } while (!mask[ty]?.[tx] && attempts < 2000);
+    return {
+      wx: tx * TILE_SIZE + TILE_SIZE / 2,
+      wy: ty * TILE_SIZE + TILE_SIZE / 2,
+    };
+  }
+
+  private spawnPickupAt(pos: { wx: number; wy: number }): PickupItem {
+    const sprite = this.add.image(pos.wx, pos.wy, 'fireball-pickup');
+    sprite.setDisplaySize(14, 14).setDepth(8);
+
+    const tween = this.tweens.add({
+      targets: sprite,
+      y: pos.wy - 5,
+      duration: 900,
+      ease: 'Sine.easeInOut',
+      yoyo: true,
+      repeat: -1,
+      delay: Math.random() * 900, // stagger so they don't all bounce in sync
+    });
+
+    const item: PickupItem = { sprite, active: true, worldX: pos.wx, worldY: pos.wy, tween };
+    this.pickupItems.push(item);
+    return item;
+  }
+
+  private tryFireProjectile(): void {
+    if (this.fireballCount <= 0) return;
+    this.fireballCount--;
+    this.events.emit('inventoryChanged', this.fireballCount);
+
+    const dirX = this.player.facingX;
+    const dirY = this.player.facingY;
+    const len = Math.sqrt(dirX * dirX + dirY * dirY) || 1;
+    const nx = dirX / len;
+    const ny = dirY / len;
+
+    const angle = Math.atan2(ny, nx) * (180 / Math.PI);
+    const sprite = this.add.image(this.player.x, this.player.y, 'fireball');
+    sprite.setDisplaySize(28, 28).setDepth(12).setAngle(angle);
+
+    this.activeProjectiles.push({
+      sprite, dirX: nx, dirY: ny,
+      traveled: 0, flickering: false, flickerTimer: 0,
+    });
+  }
+
+  private updateProjectiles(delta: number): void {
+    const step = this.FIREBALL_SPEED * (delta / 1000);
+    for (let i = this.activeProjectiles.length - 1; i >= 0; i--) {
+      const p = this.activeProjectiles[i];
+      p.sprite.x += p.dirX * step;
+      p.sprite.y += p.dirY * step;
+      p.traveled += step;
+
+      if (p.traveled >= this.FIREBALL_FLICKER_PX) {
+        p.flickering = true;
+        p.flickerTimer += delta;
+        p.sprite.setVisible(Math.floor(p.flickerTimer / 80) % 2 === 0);
+      }
+
+      if (p.traveled >= this.FIREBALL_RANGE_PX) {
+        p.sprite.destroy();
+        this.activeProjectiles.splice(i, 1);
+        continue;
+      }
+
+      let hit = false;
+      this.remotePlayers.forEach((rp, sessionId) => {
+        if (hit) return;
+        if (!rp.alive) return;
+        const dist = Phaser.Math.Distance.Between(
+          p.sprite.x, p.sprite.y, rp.sprite.x, rp.sprite.y,
+        );
+        if (dist < 40) {
+          sendFireball(sessionId, p.dirX, p.dirY);
+          p.sprite.destroy();
+          this.activeProjectiles.splice(i, 1);
+          hit = true;
+        }
+      });
+    }
+  }
+
+  private checkPickupCollisions(): void {
+    if (this.fireballCount >= this.MAX_FIREBALLS) return;
+    for (const item of this.pickupItems) {
+      if (!item.active) continue;
+      const dist = Phaser.Math.Distance.Between(
+        this.player.x, this.player.y, item.worldX, item.worldY,
+      );
+      if (dist < 18) {
+        item.active = false;
+        item.tween?.stop();
+        item.sprite.setVisible(false);
+        this.fireballCount = Math.min(this.fireballCount + 1, this.MAX_FIREBALLS);
+        this.events.emit('inventoryChanged', this.fireballCount);
+        // Remove old item and respawn at a new random location after 20s
+        const idx = this.pickupItems.indexOf(item);
+        this.time.delayedCall(20000, () => {
+          if (idx !== -1) {
+            item.sprite.destroy();
+            this.pickupItems.splice(idx, 1);
+          }
+          this.spawnPickupAt(this.randomWalkableTile());
+        });
+      }
+    }
   }
 }

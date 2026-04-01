@@ -33,6 +33,8 @@ const ATTACK_RANGE = 38;
 const ATTACK_RATE = 450;
 const HIT_COOLDOWN = 200; // how often a player can be hit
 const RESPAWN_DELAY = 5000;
+const FIREBALL_DAMAGE = 50;
+const FIREBALL_RANGE  = 600; // generous buffer for network latency — client validates visual hit
 
 const PLAYER_COLORS = [0x3498db, 0xe74c3c, 0x2ecc71, 0xf39c12];
 
@@ -157,6 +159,33 @@ export class MyRoom extends Room {
         dirX,
         dirY,
       });
+    },
+
+    fireball: (client: Client, message: { targetId: string; dirX?: number; dirY?: number }) => {
+      if (this.state.phase !== 'playing') return;
+      const attacker = this.state.players.get(client.sessionId);
+      if (!attacker || !attacker.alive) return;
+      const target = this.state.players.get(message.targetId);
+      if (!target || !target.alive) return;
+
+      const dx = target.x - attacker.x;
+      const dy = target.y - attacker.y;
+      if (Math.sqrt(dx * dx + dy * dy) > FIREBALL_RANGE) return;
+
+      target.hp -= FIREBALL_DAMAGE;
+      if (target.hp <= 0) {
+        target.hp = 0;
+        target.alive = false;
+        target.deaths += 1;
+        attacker.kills += 1;
+        attacker.hp = attacker.maxHp;
+        this.broadcast('killed', { victimId: message.targetId, killerId: client.sessionId });
+        this.clock.setTimeout(() => {
+          const spawn = gameSpawnPoint();
+          target.x = spawn.x; target.y = spawn.y;
+          target.hp = target.maxHp; target.alive = true;
+        }, RESPAWN_DELAY);
+      }
     },
 
     endGame: (client: Client) => {

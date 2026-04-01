@@ -99,6 +99,11 @@ export function sendSwing(dirX: number, dirY: number): void {
   room.send('swing', { dirX, dirY });
 }
 
+export function sendFireball(targetId: string, dirX: number, dirY: number): void {
+  if (!room) return;
+  room.send('fireball', { targetId, dirX, dirY });
+}
+
 export function sendEndGame(): void {
   if (!room) return;
   room.send('endGame');

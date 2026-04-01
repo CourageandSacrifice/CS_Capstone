@@ -40,6 +40,9 @@ export class HUDScene extends Phaser.Scene {
   private waitingStatusText!: Phaser.GameObjects.Text;
   private startGameBtn?: Phaser.GameObjects.Container;
 
+  private inventoryContainer?: Phaser.GameObjects.Container;
+  private inventorySlotImages: (Phaser.GameObjects.Image | null)[] = [null, null, null];
+
   private readonly MINIMAP_W = 160;
   private readonly MINIMAP_H = 120;
   private readonly MINIMAP_Y = 10;
@@ -118,7 +121,7 @@ export class HUDScene extends Phaser.Scene {
     }).setOrigin(0.5).setVisible(false);
 
     // Controls legend
-    this.controlsText = this.add.text(width / 2, height - 28, 'WASD: Move  |  O: Attack  |  SPACE: Dash', {
+    this.controlsText = this.add.text(width / 2, height - 28, 'WASD: Move  |  O: Attack  |  SPACE: Dash  |  P: Fireball', {
       fontFamily: 'Courier New, monospace',
       fontSize: '18px',
       color: '#a8dadc',
@@ -229,6 +232,9 @@ export class HUDScene extends Phaser.Scene {
     });
     this.gameScene.events.on('hostChanged', (hostSessionId: string) => {
       this.onHostChanged(hostSessionId);
+    });
+    this.gameScene.events.on('inventoryChanged', (count: number) => {
+      this.updateInventoryDisplay(count);
     });
 
     // Auto-connect: lobby already established the room — always prefer that over reconnect token
@@ -378,6 +384,8 @@ export class HUDScene extends Phaser.Scene {
     this.waitingStatusText.setVisible(false);
     if (this.startGameBtn) this.startGameBtn.setVisible(false);
 
+    this.createInventoryBox();
+
     // Run countdown, then reveal game HUD
     this.gameScene.setCountdownActive(true);
     this.showCountdown(() => {
@@ -457,6 +465,12 @@ export class HUDScene extends Phaser.Scene {
 
   private revertToWaiting(): void {
     this.gamePhase = 'waiting';
+
+    if (this.inventoryContainer) {
+      this.inventoryContainer.destroy();
+      this.inventoryContainer = undefined;
+      this.inventorySlotImages = [null, null, null];
+    }
 
     // Destroy game over overlay if still showing
     this.gameOverObjects.forEach(o => { try { (o as any).destroy(); } catch {} });
@@ -726,6 +740,55 @@ export class HUDScene extends Phaser.Scene {
         }
       },
     });
+  }
+
+  private createInventoryBox(): void {
+    const { width, height } = this.scale;
+    const cx = width / 2;
+    const cy = height - 72;
+
+    const container = this.add.container(cx, cy);
+    container.setDepth(10).setScrollFactor(0);
+
+    const bg = this.add.graphics();
+    bg.fillStyle(0x000000, 0.55);
+    bg.fillRoundedRect(-76, -22, 152, 44, 6);
+    container.add(bg);
+
+    const label = this.add.text(-70, -18, '🔥', {
+      fontSize: '12px', color: '#ffaa44',
+    }).setOrigin(0, 0);
+    container.add(label);
+
+    const SLOT_SIZE = 34;
+    const SLOT_GAP  = 6;
+    const startX = -44;
+
+    for (let i = 0; i < 3; i++) {
+      const sx = startX + i * (SLOT_SIZE + SLOT_GAP);
+
+      const slot = this.add.graphics();
+      slot.lineStyle(2, 0xff8800, 0.8);
+      slot.strokeRect(sx, -SLOT_SIZE / 2, SLOT_SIZE, SLOT_SIZE);
+      slot.fillStyle(0x111111, 0.4);
+      slot.fillRect(sx + 1, -SLOT_SIZE / 2 + 1, SLOT_SIZE - 2, SLOT_SIZE - 2);
+      container.add(slot);
+
+      const img = this.add.image(sx + SLOT_SIZE / 2, 0, 'fireball-pickup');
+      img.setDisplaySize(SLOT_SIZE - 6, SLOT_SIZE - 6).setVisible(false);
+      container.add(img);
+      this.inventorySlotImages[i] = img;
+    }
+
+    this.inventoryContainer = container;
+    this.updateInventoryDisplay(0);
+  }
+
+  private updateInventoryDisplay(count: number): void {
+    for (let i = 0; i < 3; i++) {
+      const img = this.inventorySlotImages[i];
+      if (img) img.setVisible(i < count);
+    }
   }
 
   private drawHpBar(ratio: number): void {

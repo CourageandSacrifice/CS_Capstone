@@ -76,8 +76,8 @@ export class Player {
   private readonly MAX_DASH_CHARGES = 3;
   private dashChargeCooldown = 0;
   dashRechargeCooldown = 0;
-  private facingX = 0;
-  private facingY = 1; // default facing down
+  facingX = 0;
+  facingY = 1; // default facing down
   private currentAnim = '';
   private bounceRemainX = 0;
   private bounceRemainY = 0;
