@@ -41,6 +41,28 @@ function gameSpawnPoint(): { x: number; y: number } {
   return { x: tx * TILE_SIZE + TILE_SIZE / 2, y: ty * TILE_SIZE + TILE_SIZE / 2 };
 }
 
+// Like gameSpawnPoint but tries to stay at least minDist pixels away from all taken positions.
+// Falls back to any valid walkable tile if no spread point is found after 200 attempts.
+function gameSpawnPointAway(taken: { x: number; y: number }[], minDist: number): { x: number; y: number } {
+  let tx: number, ty: number, px: number, py: number;
+  let attempts = 0;
+  do {
+    tx = SPAWN_ZONE.xMin + Math.floor(Math.random() * (SPAWN_ZONE.xMax - SPAWN_ZONE.xMin + 1));
+    ty = SPAWN_ZONE.yMin + Math.floor(Math.random() * (SPAWN_ZONE.yMax - SPAWN_ZONE.yMin + 1));
+    px = tx * TILE_SIZE + TILE_SIZE / 2;
+    py = ty * TILE_SIZE + TILE_SIZE / 2;
+    attempts++;
+    if (!isSpawnTileWalkable(tx, ty)) continue;
+    const tooClose = taken.some(p => {
+      const dx = p.x - px, dy = p.y - py;
+      return Math.sqrt(dx * dx + dy * dy) < minDist;
+    });
+    if (!tooClose) return { x: px, y: py };
+  } while (attempts < 200);
+  // Fallback: any walkable tile
+  return gameSpawnPoint();
+}
+
 const ATTACK_DAMAGE = 20;
 const ATTACK_RANGE = 54;
 const ATTACK_RATE = 450;
@@ -248,9 +270,10 @@ export class MyRoom extends Room {
           if (this.state.timeRemaining > 0) this.state.timeRemaining--;
         }, 1000);
       }, 4000);
-      let i = 0;
+      const takenSpawns: { x: number; y: number }[] = [];
       this.state.players.forEach((player) => {
-        const spawn = gameSpawnPoint();
+        const spawn = gameSpawnPointAway(takenSpawns, 80);
+        takenSpawns.push(spawn);
         player.x = spawn.x;
         player.y = spawn.y;
         player.hp = player.maxHp;
