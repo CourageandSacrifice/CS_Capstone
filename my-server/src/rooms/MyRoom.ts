@@ -22,9 +22,22 @@ const WORLD_H = MAP_H * TILE_SIZE;
 // Clear of all buildings — pixel coords ~1088–1328 x, ~704–928 y.
 const SPAWN_ZONE = { xMin: 68, xMax: 82, yMin: 44, yMax: 58 };
 
+const SPAWN_ZONE_BLOCKED = new Set<string>([
+    "81,48", "81,49",
+  ]);
+
+function isSpawnTileWalkable(tx: number, ty: number): boolean {
+  return !SPAWN_ZONE_BLOCKED.has(`${tx},${ty}`);
+}
+
 function gameSpawnPoint(): { x: number; y: number } {
-  const tx = SPAWN_ZONE.xMin + Math.floor(Math.random() * (SPAWN_ZONE.xMax - SPAWN_ZONE.xMin + 1));
-  const ty = SPAWN_ZONE.yMin + Math.floor(Math.random() * (SPAWN_ZONE.yMax - SPAWN_ZONE.yMin + 1));
+  let tx: number, ty: number;
+  let attempts = 0;
+  do {
+    tx = SPAWN_ZONE.xMin + Math.floor(Math.random() * (SPAWN_ZONE.xMax - SPAWN_ZONE.xMin + 1));
+    ty = SPAWN_ZONE.yMin + Math.floor(Math.random() * (SPAWN_ZONE.yMax - SPAWN_ZONE.yMin + 1));
+    attempts++;
+  } while (!isSpawnTileWalkable(tx, ty) && attempts < 100);
   return { x: tx * TILE_SIZE + TILE_SIZE / 2, y: ty * TILE_SIZE + TILE_SIZE / 2 };
 }
 
