@@ -18,8 +18,7 @@ const MAP_H = 100;
 const WORLD_W = MAP_W * TILE_SIZE;
 const WORLD_H = MAP_H * TILE_SIZE;
 
-// Safe spawn zone: true center of map (tile 75,50), clear of all buildings.
-// Clear of all buildings — pixel coords ~1088–1328 x, ~704–928 y.
+// Safe spawn zone for respawns: center of map, clear of buildings.
 const SPAWN_ZONE = { xMin: 68, xMax: 82, yMin: 44, yMax: 58 };
 
 const SPAWN_ZONE_BLOCKED = new Set<string>([
@@ -39,6 +38,41 @@ function gameSpawnPoint(): { x: number; y: number } {
     attempts++;
   } while (!isSpawnTileWalkable(tx, ty) && attempts < 100);
   return { x: tx * TILE_SIZE + TILE_SIZE / 2, y: ty * TILE_SIZE + TILE_SIZE / 2 };
+}
+
+/**
+ * Generate spread-out spawn points for game start using a jittered grid.
+ * Divides the playable map into a grid of cells and picks one random point
+ * per cell, guaranteeing players start far from each other.
+ */
+function gameStartSpawnPoints(count: number): { x: number; y: number }[] {
+  const MARGIN = 8; // tile margin from map edges
+  const usableW = MAP_W - 2 * MARGIN; // 134 tiles
+  const usableH = MAP_H - 2 * MARGIN; // 84 tiles
+
+  const cols = Math.ceil(Math.sqrt(count));
+  const rows = Math.ceil(count / cols);
+  const cellW = Math.floor(usableW / cols);
+  const cellH = Math.floor(usableH / rows);
+
+  // Build a shuffled list of grid cells
+  const cells: { col: number; row: number }[] = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      cells.push({ col: c, row: r });
+    }
+  }
+  for (let i = cells.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [cells[i], cells[j]] = [cells[j], cells[i]];
+  }
+
+  return cells.slice(0, count).map(({ col, row }) => {
+    // Pick a random tile within the cell (with 1-tile inner padding)
+    const tx = MARGIN + col * cellW + 1 + Math.floor(Math.random() * Math.max(1, cellW - 2));
+    const ty = MARGIN + row * cellH + 1 + Math.floor(Math.random() * Math.max(1, cellH - 2));
+    return { x: tx * TILE_SIZE + TILE_SIZE / 2, y: ty * TILE_SIZE + TILE_SIZE / 2 };
+  });
 }
 
 const ATTACK_DAMAGE = 20;
@@ -224,9 +258,10 @@ export class MyRoom extends Room {
           if (this.state.timeRemaining > 0) this.state.timeRemaining--;
         }, 1000);
       }, 4000);
-      let i = 0;
+      const spawnPoints = gameStartSpawnPoints(this.state.players.size);
+      let spawnIdx = 0;
       this.state.players.forEach((player) => {
-        const spawn = gameSpawnPoint();
+        const spawn = spawnPoints[spawnIdx++] ?? gameSpawnPoint();
         player.x = spawn.x;
         player.y = spawn.y;
         player.hp = player.maxHp;
