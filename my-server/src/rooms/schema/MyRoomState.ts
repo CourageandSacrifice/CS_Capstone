@@ -23,4 +23,5 @@ export class MyRoomState extends Schema {
   @type("number") gameEndTime: number = 0;
   @type("number") timeRemaining: number = 0;
   @type("boolean") timeLimitReached: boolean = false;
+  @type("number") pickupSeed: number = 0;
 }

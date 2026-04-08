@@ -163,8 +163,10 @@ export class Player {
     const dir = this.getDirection();
     if (!this.isAttacking) {
       let state: string;
-      if (this.isDashing && isMoving) state = 'sprint';
-      else if (isMoving) state = 'run';
+      if (this.isDashing && isMoving) {
+        const dashKey = `${this.classData.spriteKey}_dash_${dir}`;
+        state = this.scene.anims.exists(dashKey) ? 'dash' : 'sprint';
+      } else if (isMoving) state = 'run';
       else state = 'idle';
       this.playAnim(`${this.classData.spriteKey}_${state}_${dir}`);
     }
@@ -317,10 +319,19 @@ export class Player {
   takeDamage(amount: number): void {
     this.hp = Math.max(0, this.hp - amount);
     this.body.setTint(0xff4444);
-    this.scene.time.delayedCall(100, () => {
-      this.body.clearTint();
-    });
+    this.scene.time.delayedCall(100, () => { this.body.clearTint(); });
     this.scene.events.emit('playerHpChanged', this.hp, this.maxHp);
+
+    const dmgKey = `${this.classData.spriteKey}_take_damage_${this.getDirection()}`;
+    if (this.scene.anims.exists(dmgKey) && !this.isAttacking) {
+      this.isAttacking = true;
+      this.currentAnim = dmgKey;
+      this.body.play(dmgKey);
+      this.body.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+        this.isAttacking = false;
+        this.currentAnim = '';
+      });
+    }
   }
 
   playDeath(): void {
