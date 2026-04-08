@@ -3,11 +3,13 @@ import { Client, Room } from '@colyseus/sdk';
 const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? `ws://${window.location.hostname}:2567`;
 const TOKEN_KEY = 'cc_reconnectionToken';
 
-let client: Client;
+let client: Client | null = null;
 let room: Room;
 
 function initClient(): Client {
-  if (!client) client = new Client(SERVER_URL);
+  // Always create a fresh Client — reusing a stale one after a failed WebSocket
+  // handshake can leave internal state broken, causing repeated connection failures.
+  client = new Client(SERVER_URL);
   return client;
 }
 
@@ -19,7 +21,12 @@ function setupRoom(r: Room): Room {
   // Store reconnection token for page refresh recovery
   sessionStorage.setItem(TOKEN_KEY, room.reconnectionToken);
 
+  // Leave the room cleanly when the tab is closed or refreshed
+  const leaveOnUnload = () => { try { room.leave(true); } catch {} };
+  window.addEventListener('beforeunload', leaveOnUnload);
+
   room.onLeave((code) => {
+    window.removeEventListener('beforeunload', leaveOnUnload);
     console.log('Left room. Code:', code);
     // Code 1000 = normal close (intentional leave)
     if (code === 1000) {
@@ -102,6 +109,11 @@ export function sendSwing(dirX: number, dirY: number): void {
 export function sendFireball(targetId: string, dirX: number, dirY: number): void {
   if (!room) return;
   room.send('fireball', { targetId, dirX, dirY });
+}
+
+export function sendFireballLaunched(x: number, y: number, dirX: number, dirY: number): void {
+  if (!room) return;
+  room.send('fireballLaunched', { x, y, dirX, dirY });
 }
 
 export function sendEndGame(): void {

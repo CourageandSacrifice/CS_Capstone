@@ -77,11 +77,11 @@ function gameStartSpawnPoints(count: number): { x: number; y: number }[] {
 }
 
 const ATTACK_DAMAGE = 20;
-const ATTACK_RANGE = 38;
+const ATTACK_RANGE = 54;
 const ATTACK_RATE = 450;
 const HIT_COOLDOWN = 200; // how often a player can be hit
 const RESPAWN_DELAY = 5000;
-const FIREBALL_DAMAGE = 50;
+const FIREBALL_DAMAGE = 40;
 const FIREBALL_RANGE  = 600; // generous buffer for network latency — client validates visual hit
 
 const PLAYER_COLORS = [0x3498db, 0xe74c3c, 0x2ecc71, 0xf39c12];
@@ -105,8 +105,19 @@ export class MyRoom extends Room {
   private joinOrder: string[] = []; // tracks join order for host migration
   private autoEndTimer?: ReturnType<typeof this.clock.setTimeout>;
   private tickInterval?: ReturnType<typeof this.clock.setInterval>;
+  private emptyRoomTimer?: ReturnType<typeof this.clock.setTimeout>;
   // Maps sessionId → clerkId (not synced to clients, server-only)
   private playerClerkIds = new Map<string, string>();
+
+  private scheduleEmptyDispose(): void {
+    if (this.emptyRoomTimer) { this.emptyRoomTimer.clear(); this.emptyRoomTimer = undefined; }
+    this.emptyRoomTimer = this.clock.setTimeout(() => {
+      if (this.state.players.size === 0) {
+        console.log(`Room ${this.roomId}: empty for 5 minutes, disposing.`);
+        this.disconnect();
+      }
+    }, 5 * 60 * 1000);
+  }
 
   private transferHost(): void {
     const next = this.joinOrder[0];
@@ -211,6 +222,19 @@ export class MyRoom extends Room {
       });
     },
 
+    fireballLaunched: (client: Client, message: { x: number; y: number; dirX: number; dirY: number }) => {
+      if (this.state.phase !== 'playing') return;
+      const shooter = this.state.players.get(client.sessionId);
+      if (!shooter || !shooter.alive) return;
+      this.broadcast('fireballEffect', {
+        shooterId: client.sessionId,
+        x: message.x,
+        y: message.y,
+        dirX: message.dirX,
+        dirY: message.dirY,
+      }, { except: client });
+    },
+
     fireball: (client: Client, message: { targetId: string; dirX?: number; dirY?: number }) => {
       if (this.state.phase !== 'playing') return;
       const attacker = this.state.players.get(client.sessionId);
@@ -248,6 +272,7 @@ export class MyRoom extends Room {
     startGame: (client: Client) => {
       if (client.sessionId !== this.hostId) return;
       if (this.state.phase !== "waiting") return;
+      this.state.pickupSeed = (Math.random() * 0xFFFFFF | 0) + 1;
       this.state.phase = "playing";
       this.lock(); // block new joins
       const GAME_DURATION = 304000; // 5 min + ~4s countdown buffer
@@ -358,6 +383,9 @@ export class MyRoom extends Room {
   }
 
   onJoin (client: Client, options: any) {
+    // Cancel empty-room timer — someone joined
+    if (this.emptyRoomTimer) { this.emptyRoomTimer.clear(); this.emptyRoomTimer = undefined; }
+
     this.joinOrder.push(client.sessionId);
     if (!this.hostId) {
       this.hostId = client.sessionId;
@@ -406,6 +434,7 @@ export class MyRoom extends Room {
       this.state.players.delete(client.sessionId);
       if (wasHost) this.transferHost();
       console.log("Players remaining:", this.state.players.size);
+      if (this.state.players.size === 0) this.scheduleEmptyDispose();
     }
   }
 
@@ -422,9 +451,11 @@ export class MyRoom extends Room {
 
     if (wasHost) this.transferHost();
     console.log(client.sessionId, "left! Players:", this.state.players.size);
+    if (this.state.players.size === 0) this.scheduleEmptyDispose();
   }
 
   onDispose() {
+    if (this.emptyRoomTimer) { this.emptyRoomTimer.clear(); this.emptyRoomTimer = undefined; }
     console.log("room", this.roomId, "disposing...");
   }
 }
