@@ -100,9 +100,19 @@ export class RemotePlayer {
 
   takeDamageFlash(): void {
     this.body.setTint(0xff4444);
-    this.sprite.scene.time.delayedCall(250, () => {
-      this.body.clearTint();
-    });
+    this.sprite.scene.time.delayedCall(250, () => { this.body.clearTint(); });
+
+    const dmgKey = `${this.spriteKey}_take_damage_${this.getDirection()}`;
+    const scene = this.sprite.scene;
+    if (scene.anims.exists(dmgKey) && !this.isAttacking) {
+      this.isAttacking = true;
+      this.currentAnim = dmgKey;
+      this.body.play(dmgKey);
+      this.body.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+        this.isAttacking = false;
+        this.currentAnim = '';
+      });
+    }
   }
 
   showAttackEffect(dirX: number, dirY: number): void {

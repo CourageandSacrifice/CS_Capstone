@@ -80,7 +80,7 @@ const ATTACK_RANGE = 54;
 const ATTACK_RATE = 450;
 const HIT_COOLDOWN = 200; // how often a player can be hit
 const RESPAWN_DELAY = 5000;
-const FIREBALL_DAMAGE = 50;
+const FIREBALL_DAMAGE = 40;
 const FIREBALL_RANGE  = 600; // generous buffer for network latency — client validates visual hit
 
 const PLAYER_COLORS = [0x3498db, 0xe74c3c, 0x2ecc71, 0xf39c12];
@@ -269,6 +269,7 @@ export class MyRoom extends Room {
     startGame: (client: Client) => {
       if (client.sessionId !== this.hostId) return;
       if (this.state.phase !== "waiting") return;
+      this.state.pickupSeed = (Math.random() * 0xFFFFFF | 0) + 1;
       this.state.phase = "playing";
       this.lock(); // block new joins
       const GAME_DURATION = 304000; // 5 min + ~4s countdown buffer

@@ -12,7 +12,7 @@ import {
 import { ClassData, DEFAULT_CLASS, CHARACTERS } from '../data/Classes';
 import { Player } from '../entities/Player';
 import { RemotePlayer } from '../entities/RemotePlayer';
-import { sendPosition, sendAttack, sendSwing, sendEndGame, sendFireball } from '../network/Network';
+import { sendPosition, sendAttack, sendSwing, sendEndGame, sendFireball, sendFireballLaunched } from '../network/Network';
 import { Room, getStateCallbacks } from '@colyseus/sdk';
 
 interface ActiveProjectile {
@@ -61,11 +61,15 @@ export class GameScene extends Phaser.Scene {
   private pKey!: Phaser.Input.Keyboard.Key;
   private fireballCount = 0;
   private readonly MAX_FIREBALLS = 3;
-  private readonly FIREBALL_SPEED = 220;
+  private readonly FIREBALL_SPEED = 495;
   private readonly FIREBALL_RANGE_PX = 240;
   private readonly FIREBALL_FLICKER_PX = 208;
   private activeProjectiles: ActiveProjectile[] = [];
+  private remoteProjectiles: ActiveProjectile[] = [];
   private pickupItems: PickupItem[] = [];
+  private healthPickups: PickupItem[] = [];
+  private validPickupTiles: { wx: number; wy: number }[] = [];
+  private pickupRng: (() => number) | null = null;
 
   constructor() {
     super('GameScene');
@@ -80,9 +84,22 @@ export class GameScene extends Phaser.Scene {
           { frameWidth: 96, frameHeight: 80 });
       }
     }
+
+    // Scout + Lancer — 48×64 frames (8 frames per sheet), spear weapon
+    for (const sk of ['scout', 'lancer']) {
+      for (const state of ['idle', 'run', 'attack', 'dash', 'death']) {
+        for (const dir of ['down', 'up', 'left', 'right']) {
+          this.load.spritesheet(`${sk}_${state}_${dir}`,
+            `/characters/${sk}_${state}_${dir}.png`,
+            { frameWidth: 48, frameHeight: 64 });
+        }
+      }
+    }
+
     this.load.image('campus-map', '/campus-map.png');
     this.load.spritesheet('fireball', '/fireball-sheet.png', { frameWidth: 64, frameHeight: 32 });
     this.load.image('fireball-pickup', '/fireball-pickup.png');
+    this.load.image('health-pickup', '/health-pickup.png');
 
     this.load.audio('sfx_attack',    '/audio/attack.mp3');
     this.load.audio('sfx_dash',      '/audio/dash.mp3');
@@ -106,6 +123,7 @@ export class GameScene extends Phaser.Scene {
       repeat: -1,
     });
 
+
     // Build walkability bitmask now — image is guaranteed decoded after preload
     const tex = this.textures.get('campus-map');
     const src = tex.getSourceImage() as HTMLImageElement;
@@ -118,6 +136,7 @@ export class GameScene extends Phaser.Scene {
       ctx.getImageData(0, 0, offscreen.width, offscreen.height),
       offscreen.width, offscreen.height,
     ));
+    this.buildValidPickupTiles();
 
     // Start in waiting room (20×20 tiles)
     const waitW = 20 * TILE_SIZE;
@@ -228,6 +247,8 @@ export class GameScene extends Phaser.Scene {
     syncSpawn();
     this.time.delayedCall(0, syncSpawn);
 
+    const seed = (this.room?.state as any)?.pickupSeed ?? (Date.now() & 0xFFFFFF);
+    this.pickupRng = GameScene.makeSeededRng(seed);
     this.spawnPickupItems();
     this.events.emit('gameStarted');
   }
@@ -399,6 +420,23 @@ export class GameScene extends Phaser.Scene {
       const rp = this.remotePlayers.get(data.attackerId);
       if (rp) rp.showAttackEffect(data.dirX, data.dirY);
     });
+
+    room.onMessage('fireballEffect', (data: {
+      shooterId: string;
+      x: number;
+      y: number;
+      dirX: number;
+      dirY: number;
+    }) => {
+      const angle = Math.atan2(data.dirY, data.dirX) * (180 / Math.PI);
+      const sprite = this.add.sprite(data.x, data.y, 'fireball');
+      sprite.setDisplaySize(104, 52).setDepth(12).setAngle(angle);
+      sprite.play('fireball_fly');
+      this.remoteProjectiles.push({
+        sprite, dirX: data.dirX, dirY: data.dirY,
+        traveled: 0, flickering: false, flickerTimer: 0,
+      });
+    });
   }
 
   setCountdownActive(v: boolean): void {
@@ -408,8 +446,12 @@ export class GameScene extends Phaser.Scene {
   revertToWaitingRoom(): void {
     this.activeProjectiles.forEach(p => p.sprite.destroy());
     this.activeProjectiles = [];
+    this.remoteProjectiles.forEach(p => p.sprite.destroy());
+    this.remoteProjectiles = [];
     this.pickupItems.forEach(p => { p.tween?.stop(); p.sprite.destroy(); });
     this.pickupItems = [];
+    this.healthPickups.forEach(p => { p.tween?.stop(); p.sprite.destroy(); });
+    this.healthPickups = [];
     this.fireballCount = 0;
     this.events.emit('inventoryChanged', 0);
 
@@ -517,6 +559,31 @@ export class GameScene extends Phaser.Scene {
         });
       }
     }
+
+    // SCOUT + LANCER — 48×64 frames, 8 frames per sheet
+    const spearDefs = [
+      { state: 'idle',   srcState: 'idle',   fps: 8,  repeat: -1 },
+      { state: 'run',    srcState: 'run',    fps: 10, repeat: -1 },
+      { state: 'sprint', srcState: 'run',    fps: 16, repeat: -1 },
+      { state: 'attack', srcState: 'attack', fps: 14, repeat: 0  },
+      { state: 'dash',   srcState: 'dash',   fps: 18, repeat: 0  },
+      { state: 'death',  srcState: 'death',  fps: 8,  repeat: 0  },
+    ];
+    for (const sk of ['scout', 'lancer']) {
+      for (const def of spearDefs) {
+        for (const dir of dirs) {
+          const key = `${sk}_${def.state}_${dir}`;
+          if (this.anims.exists(key)) this.anims.remove(key);
+          this.anims.create({
+            key,
+            frames: this.anims.generateFrameNumbers(`${sk}_${def.srcState}_${dir}`, { start: 0, end: 7 }),
+            frameRate: def.fps,
+            repeat: def.repeat,
+          });
+        }
+      }
+    }
+
   }
 
   private drawMap(): void {
@@ -575,9 +642,35 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // Update projectiles
+    // Sync state directly from server every frame — bypasses unreliable listen() callbacks
+    if (this.room) {
+      const st = this.room.state as any;
+      if (st) {
+        // Phase transition: waiting → playing
+        if (st.phase === 'playing' && this.gamePhase !== 'playing') {
+          this.startFullGame();
+        } else if (st.phase === 'waiting' && this.gamePhase === 'playing') {
+          this.revertToWaitingRoom();
+        }
+        // Remote player positions
+        if (st.players) {
+          st.players.forEach((ps: any, sid: string) => {
+            if (sid === this.room!.sessionId) return;
+            const rp = this.remotePlayers.get(sid);
+            if (rp) rp.updatePosition(ps.x, ps.y);
+          });
+        }
+      }
+    }
+
+    // Update local projectiles
     if (this.activeProjectiles.length > 0) {
       this.updateProjectiles(delta);
+    }
+
+    // Update remote projectiles independently
+    if (this.remoteProjectiles.length > 0) {
+      this.updateRemoteProjectiles(delta);
     }
 
     // Pickup collision
@@ -596,36 +689,57 @@ export class GameScene extends Phaser.Scene {
   private spawnPickupItems(): void {
     this.pickupItems.forEach(p => { p.tween?.stop(); p.sprite.destroy(); });
     this.pickupItems = [];
+    this.healthPickups.forEach(p => { p.tween?.stop(); p.sprite.destroy(); });
+    this.healthPickups = [];
 
     for (let i = 0; i < 10; i++) {
       this.spawnPickupAt(this.randomWalkableTile());
     }
+    for (let i = 0; i < 6; i++) {
+      this.spawnHealthPickupAt(this.randomWalkableTile());
+    }
   }
 
   private randomWalkableTile(): { wx: number; wy: number } {
-    const mask = getBitmask();
-    // Fallback if mask not ready
-    if (!mask) {
-      const wx = (80 + Math.random() * 40) * TILE_SIZE;
-      const wy = (40 + Math.random() * 40) * TILE_SIZE;
-      return { wx, wy };
+    if (this.validPickupTiles.length > 0 && this.pickupRng) {
+      const idx = Math.floor(this.pickupRng() * this.validPickupTiles.length);
+      return this.validPickupTiles[idx];
     }
-    let tx = 0, ty = 0;
-    let attempts = 0;
-    do {
-      tx = Math.floor(Math.random() * MAP_W);
-      ty = Math.floor(Math.random() * MAP_H);
-      attempts++;
-    } while (!mask[ty]?.[tx] && attempts < 2000);
-    return {
-      wx: tx * TILE_SIZE + TILE_SIZE / 2,
-      wy: ty * TILE_SIZE + TILE_SIZE / 2,
+    // Fallback: rough center of map
+    return { wx: (MAP_W / 2) * TILE_SIZE, wy: (MAP_H / 2) * TILE_SIZE };
+  }
+
+  private buildValidPickupTiles(): void {
+    const mask = getBitmask();
+    if (!mask) return;
+    const clearance = 3;
+    const valid: { wx: number; wy: number }[] = [];
+    for (let ty = clearance; ty < MAP_H - clearance; ty++) {
+      for (let tx = clearance; tx < MAP_W - clearance; tx++) {
+        if (!mask[ty]?.[tx]) continue;
+        let ok = true;
+        outer: for (let dy = -clearance; dy <= clearance; dy++) {
+          for (let dx = -clearance; dx <= clearance; dx++) {
+            if (!mask[ty + dy]?.[tx + dx]) { ok = false; break outer; }
+          }
+        }
+        if (ok) valid.push({ wx: tx * TILE_SIZE + TILE_SIZE / 2, wy: ty * TILE_SIZE + TILE_SIZE / 2 });
+      }
+    }
+    this.validPickupTiles = valid;
+  }
+
+  private static makeSeededRng(seed: number): () => number {
+    let s = seed | 0;
+    return () => {
+      s ^= s << 13; s ^= s >> 17; s ^= s << 5;
+      return (s >>> 0) / 4294967296;
     };
   }
 
   private spawnPickupAt(pos: { wx: number; wy: number }): PickupItem {
     const sprite = this.add.image(pos.wx, pos.wy, 'fireball-pickup');
-    sprite.setDisplaySize(14, 14).setDepth(8);
+    sprite.setDisplaySize(28, 28).setDepth(8);
 
     const tween = this.tweens.add({
       targets: sprite,
@@ -642,6 +756,23 @@ export class GameScene extends Phaser.Scene {
     return item;
   }
 
+  private spawnHealthPickupAt(pos: { wx: number; wy: number }): void {
+    const sprite = this.add.image(pos.wx, pos.wy, 'health-pickup');
+    sprite.setDisplaySize(84, 84).setDepth(8);
+
+    const tween = this.tweens.add({
+      targets: sprite,
+      y: pos.wy - 5,
+      duration: 900,
+      ease: 'Sine.easeInOut',
+      yoyo: true,
+      repeat: -1,
+      delay: Math.random() * 900,
+    });
+
+    this.healthPickups.push({ sprite, active: true, worldX: pos.wx, worldY: pos.wy, tween });
+  }
+
   private tryFireProjectile(): void {
     if (this.fireballCount <= 0) return;
     this.fireballCount--;
@@ -655,8 +786,10 @@ export class GameScene extends Phaser.Scene {
 
     const angle = Math.atan2(ny, nx) * (180 / Math.PI);
     const sprite = this.add.sprite(this.player.x, this.player.y, 'fireball');
-    sprite.setDisplaySize(40, 40).setDepth(12).setAngle(angle);
+    sprite.setDisplaySize(104, 52).setDepth(12).setAngle(angle);
     sprite.play('fireball_fly');
+
+    sendFireballLaunched(this.player.x, this.player.y, nx, ny);
 
     this.activeProjectiles.push({
       sprite, dirX: nx, dirY: ny,
@@ -701,10 +834,55 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private updateRemoteProjectiles(delta: number): void {
+    const step = this.FIREBALL_SPEED * (delta / 1000);
+    for (let i = this.remoteProjectiles.length - 1; i >= 0; i--) {
+      const p = this.remoteProjectiles[i];
+      p.sprite.x += p.dirX * step;
+      p.sprite.y += p.dirY * step;
+      p.traveled += step;
+
+      if (p.traveled >= this.FIREBALL_FLICKER_PX) {
+        p.flickering = true;
+        p.flickerTimer += delta;
+        p.sprite.setVisible(Math.floor(p.flickerTimer / 80) % 2 === 0);
+      }
+
+      if (p.traveled >= this.FIREBALL_RANGE_PX) {
+        p.sprite.destroy();
+        this.remoteProjectiles.splice(i, 1);
+      }
+    }
+  }
+
   private checkPickupCollisions(): void {
-    if (this.fireballCount >= this.MAX_FIREBALLS) return;
-    for (const item of this.pickupItems) {
+    if (this.fireballCount < this.MAX_FIREBALLS) {
+      for (const item of this.pickupItems) {
+        if (!item.active) continue;
+        const dist = Phaser.Math.Distance.Between(
+          this.player.x, this.player.y, item.worldX, item.worldY,
+        );
+        if (dist < 18) {
+          item.active = false;
+          item.tween?.stop();
+          item.sprite.setVisible(false);
+          this.fireballCount = Math.min(this.fireballCount + 1, this.MAX_FIREBALLS);
+          this.events.emit('inventoryChanged', this.fireballCount);
+          const idx = this.pickupItems.indexOf(item);
+          this.time.delayedCall(20000, () => {
+            if (idx !== -1) {
+              item.sprite.destroy();
+              this.pickupItems.splice(idx, 1);
+            }
+            this.spawnPickupAt(this.randomWalkableTile());
+          });
+        }
+      }
+    }
+
+    for (const item of this.healthPickups) {
       if (!item.active) continue;
+      if (this.player.hp >= this.player.maxHp) continue;
       const dist = Phaser.Math.Distance.Between(
         this.player.x, this.player.y, item.worldX, item.worldY,
       );
@@ -712,16 +890,15 @@ export class GameScene extends Phaser.Scene {
         item.active = false;
         item.tween?.stop();
         item.sprite.setVisible(false);
-        this.fireballCount = Math.min(this.fireballCount + 1, this.MAX_FIREBALLS);
-        this.events.emit('inventoryChanged', this.fireballCount);
-        // Remove old item and respawn at a new random location after 20s
-        const idx = this.pickupItems.indexOf(item);
+        this.player.hp = Math.min(this.player.hp + 20, this.player.maxHp);
+        this.events.emit('playerHpChanged', this.player.hp, this.player.maxHp);
+        const idx = this.healthPickups.indexOf(item);
         this.time.delayedCall(20000, () => {
           if (idx !== -1) {
             item.sprite.destroy();
-            this.pickupItems.splice(idx, 1);
+            this.healthPickups.splice(idx, 1);
           }
-          this.spawnPickupAt(this.randomWalkableTile());
+          this.spawnHealthPickupAt(this.randomWalkableTile());
         });
       }
     }

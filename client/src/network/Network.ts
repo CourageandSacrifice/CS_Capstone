@@ -3,11 +3,13 @@ import { Client, Room } from '@colyseus/sdk';
 const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? `ws://${window.location.hostname}:2567`;
 const TOKEN_KEY = 'cc_reconnectionToken';
 
-let client: Client;
+let client: Client | null = null;
 let room: Room;
 
 function initClient(): Client {
-  if (!client) client = new Client(SERVER_URL);
+  // Always create a fresh Client — reusing a stale one after a failed WebSocket
+  // handshake can leave internal state broken, causing repeated connection failures.
+  client = new Client(SERVER_URL);
   return client;
 }
 
@@ -48,6 +50,8 @@ export async function createRoom(name: string, isPrivate = false, spriteKey = 'a
 
 export async function joinRoom(roomCode: string, name: string, spriteKey = 'adventurer'): Promise<Room> {
   const c = initClient();
+  // joinById does not work reliably with custom this.roomId in Colyseus 0.17.
+  // The server sets roomId = makeRoomCode(), so we join by roomId directly.
   const r = await c.joinById(roomCode.trim().toUpperCase(), { name, spriteKey });
   return setupRoom(r);
 }
@@ -102,6 +106,11 @@ export function sendSwing(dirX: number, dirY: number): void {
 export function sendFireball(targetId: string, dirX: number, dirY: number): void {
   if (!room) return;
   room.send('fireball', { targetId, dirX, dirY });
+}
+
+export function sendFireballLaunched(x: number, y: number, dirX: number, dirY: number): void {
+  if (!room) return;
+  room.send('fireballLaunched', { x, y, dirX, dirY });
 }
 
 export function sendEndGame(): void {

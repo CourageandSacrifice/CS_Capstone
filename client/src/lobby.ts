@@ -362,8 +362,11 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void): void {
         await createRoom(username, isPrivate, classData.spriteKey, maxPlayers);
         await launchGame();
         resolve({ username, mode, isPrivate, roomCode, classData });
-      } catch {
-        resetBtn();
+      } catch (err) {
+        console.error('[Campus Clash] createRoom failed:', err);
+        playBtn.textContent = 'Connection Failed';
+        playBtn.style.color = '#e63946';
+        setTimeout(resetBtn, 2500);
       }
       return;
     }
@@ -373,7 +376,8 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void): void {
         await joinAnyRoom(username, classData.spriteKey);
         await launchGame();
         resolve({ username, mode, isPrivate, roomCode, classData });
-      } catch {
+      } catch (err) {
+        console.error('[Campus Clash] joinAnyRoom failed:', err);
         joinStatus.textContent = 'No Rooms Available';
         joinStatus.style.color = '#e63946';
         setTimeout(() => { joinStatus.textContent = ''; }, 3000);
@@ -391,7 +395,8 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void): void {
       joinStatus.style.color = '#2ecc71';
       await launchGame();
       resolve({ username, mode, isPrivate, roomCode, classData });
-    } catch {
+    } catch (err) {
+      console.error('[Campus Clash] joinRoom failed:', err);
       joinStatus.textContent = 'Lobby Not Found';
       joinStatus.style.color = '#e63946';
       setTimeout(() => { joinStatus.textContent = ''; }, 3000);
