@@ -19,26 +19,17 @@ const MAP_H = 100;
 const WORLD_W = MAP_W * TILE_SIZE;
 const WORLD_H = MAP_H * TILE_SIZE;
 
-// Safe spawn zone for respawns: center of map, clear of buildings.
-const SPAWN_ZONE = { xMin: 68, xMax: 82, yMin: 44, yMax: 58 };
-
-const SPAWN_ZONE_BLOCKED = new Set<string>([
-    "81,48", "81,49",
-  ]);
-
-function isSpawnTileWalkable(tx: number, ty: number): boolean {
-  return !SPAWN_ZONE_BLOCKED.has(`${tx},${ty}`);
-}
+// Dedicated spawn points (world coordinates)
+const SPAWN_POINTS = [
+  { x: 344,  y: 616  }, // tx:21, ty:38
+  { x: 1192, y: 792  }, // tx:74, ty:49
+  { x: 2184, y: 504  }, // tx:136, ty:31
+  { x: 1288, y: 1288 }, // tx:80, ty:80
+  { x: 616,  y: 1224 }, // tx:38, ty:76
+];
 
 function gameSpawnPoint(): { x: number; y: number } {
-  let tx: number, ty: number;
-  let attempts = 0;
-  do {
-    tx = SPAWN_ZONE.xMin + Math.floor(Math.random() * (SPAWN_ZONE.xMax - SPAWN_ZONE.xMin + 1));
-    ty = SPAWN_ZONE.yMin + Math.floor(Math.random() * (SPAWN_ZONE.yMax - SPAWN_ZONE.yMin + 1));
-    attempts++;
-  } while (!isSpawnTileWalkable(tx, ty) && attempts < 100);
-  return { x: tx * TILE_SIZE + TILE_SIZE / 2, y: ty * TILE_SIZE + TILE_SIZE / 2 };
+  return SPAWN_POINTS[Math.floor(Math.random() * SPAWN_POINTS.length)];
 }
 
 /**
@@ -47,33 +38,13 @@ function gameSpawnPoint(): { x: number; y: number } {
  * per cell, guaranteeing players start far from each other.
  */
 function gameStartSpawnPoints(count: number): { x: number; y: number }[] {
-  const MARGIN = 8; // tile margin from map edges
-  const usableW = MAP_W - 2 * MARGIN; // 134 tiles
-  const usableH = MAP_H - 2 * MARGIN; // 84 tiles
-
-  const cols = Math.ceil(Math.sqrt(count));
-  const rows = Math.ceil(count / cols);
-  const cellW = Math.floor(usableW / cols);
-  const cellH = Math.floor(usableH / rows);
-
-  // Build a shuffled list of grid cells
-  const cells: { col: number; row: number }[] = [];
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      cells.push({ col: c, row: r });
-    }
+  // Shuffle the dedicated spawn points and cycle through them if count exceeds list size
+  const shuffled = [...SPAWN_POINTS].sort(() => Math.random() - 0.5);
+  const result: { x: number; y: number }[] = [];
+  for (let i = 0; i < count; i++) {
+    result.push(shuffled[i % shuffled.length]);
   }
-  for (let i = cells.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [cells[i], cells[j]] = [cells[j], cells[i]];
-  }
-
-  return cells.slice(0, count).map(({ col, row }) => {
-    // Pick a random tile within the cell (with 1-tile inner padding)
-    const tx = MARGIN + col * cellW + 1 + Math.floor(Math.random() * Math.max(1, cellW - 2));
-    const ty = MARGIN + row * cellH + 1 + Math.floor(Math.random() * Math.max(1, cellH - 2));
-    return { x: tx * TILE_SIZE + TILE_SIZE / 2, y: ty * TILE_SIZE + TILE_SIZE / 2 };
-  });
+  return result;
 }
 
 const ATTACK_DAMAGE = 20;
@@ -422,7 +393,7 @@ export class MyRoom extends Room {
   }
 
   async onDrop (client: Client, code: CloseCode) {
-    console.log(client.sessionId, "dropped! Allowing reconnection for 60s...");
+    console.log(client.sessionId, "dropped! Allowing reconnection for 30s...");
     try {
       await this.allowReconnection(client, 30);
       console.log(client.sessionId, "reconnected!");
