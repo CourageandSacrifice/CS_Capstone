@@ -4,7 +4,9 @@ import { HUDScene } from './scenes/HUDScene';
 import { initLobby } from './lobby';
 import './style.css';
 
-initLobby().then(({ username, clerkId, mode, isPrivate, roomCode, classData }) => {
+console.log('[CC] main.ts loaded — Clerk key present:', !!import.meta.env.VITE_CLERK_PUBLISHABLE_KEY);
+
+initLobby().catch((err) => console.error('[CC] initLobby failed:', err)).then(({ username, clerkId, mode, isPrivate, roomCode, classData }: any) => {
   const config: Phaser.Types.Core.GameConfig = {
     type: Phaser.AUTO,
     title: 'Campus Clash',
