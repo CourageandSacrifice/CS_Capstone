@@ -396,7 +396,7 @@ export class MyRoom extends Room {
   async onDrop (client: Client, code: CloseCode) {
     console.log(client.sessionId, "dropped! Allowing reconnection for 60s...");
     try {
-      await this.allowReconnection(client, 60);
+      await this.allowReconnection(client, 30);
       console.log(client.sessionId, "reconnected!");
     } catch {
       console.log(client.sessionId, "reconnection timed out, removing player.");
