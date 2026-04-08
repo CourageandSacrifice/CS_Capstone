@@ -1,5 +1,6 @@
 import { Room, Client, CloseCode } from "colyseus";
 import { MyRoomState, PlayerState } from "./schema/MyRoomState.js";
+import prisma from "../db.js";
 
 // Generate a short memorable room code like "FIRE" or "WOLF"
 const WORDS = [
@@ -105,6 +106,8 @@ export class MyRoom extends Room {
   private autoEndTimer?: ReturnType<typeof this.clock.setTimeout>;
   private tickInterval?: ReturnType<typeof this.clock.setInterval>;
   private emptyRoomTimer?: ReturnType<typeof this.clock.setTimeout>;
+  // Maps sessionId → clerkId (not synced to clients, server-only)
+  private playerClerkIds = new Map<string, string>();
 
   private scheduleEmptyDispose(): void {
     if (this.emptyRoomTimer) { this.emptyRoomTimer.clear(); this.emptyRoomTimer = undefined; }
@@ -296,12 +299,56 @@ export class MyRoom extends Room {
     },
   }
 
-  private triggerEndGame(timeLimitReached = false): void {
+  private async triggerEndGame(timeLimitReached = false): Promise<void> {
     if (this.tickInterval) { this.tickInterval.clear(); this.tickInterval = undefined; }
     this.state.timeLimitReached = timeLimitReached;
     this.state.gameOver = true;
     this.state.gameEndTime = 0;
     this.state.timeRemaining = 0;
+
+    // Persist stats for every player that has a clerkId
+    let topKills = -1;
+    this.state.players.forEach((p) => { if (p.kills > topKills) topKills = p.kills; });
+
+    const saves: Promise<void>[] = [];
+    this.state.players.forEach((player, sessionId) => {
+      const clerkId = this.playerClerkIds.get(sessionId);
+      if (!clerkId) return;
+      const won = player.kills === topKills && topKills >= 0;
+      saves.push(
+        (async () => {
+          try {
+            // Ensure the user row exists first (FK requirement)
+            await prisma.user.upsert({
+              where: { clerkId },
+              create: { clerkId, username: player.name },
+              update: { username: player.name },
+            });
+            // Atomically increment stats — no read needed
+            await prisma.playerStats.upsert({
+              where: { clerkId },
+              create: {
+                clerkId,
+                totalKills: player.kills,
+                totalDeaths: player.deaths,
+                totalGames: 1,
+                totalWins: won ? 1 : 0,
+              },
+              update: {
+                totalKills:  { increment: player.kills },
+                totalDeaths: { increment: player.deaths },
+                totalGames:  { increment: 1 },
+                totalWins:   { increment: won ? 1 : 0 },
+              },
+            });
+            console.log(`[stats] saved for ${player.name} — K:${player.kills} D:${player.deaths} W:${won}`);
+          } catch (err) {
+            console.error(`[stats] failed for ${player.name}:`, err);
+          }
+        })()
+      );
+    });
+    await Promise.all(saves);
 
     // After 5s, reset room to waiting instead of disconnecting
     this.clock.setTimeout(() => {
@@ -343,6 +390,11 @@ export class MyRoom extends Room {
     if (!this.hostId) {
       this.hostId = client.sessionId;
       this.state.hostSessionId = client.sessionId;
+    }
+
+    // Store clerkId for stats saving on game end (not broadcast to other clients)
+    if (typeof options?.clerkId === "string" && options.clerkId) {
+      this.playerClerkIds.set(client.sessionId, options.clerkId);
     }
 
     const spawn = this.state.phase === "waiting"
@@ -395,6 +447,7 @@ export class MyRoom extends Room {
     this.lastAttackTime.delete(client.sessionId);
     this.lastHitTime.delete(client.sessionId);
     this.lastSwingTime.delete(client.sessionId);
+    this.playerClerkIds.delete(client.sessionId);
 
     if (wasHost) this.transferHost();
     console.log(client.sessionId, "left! Players:", this.state.players.size);

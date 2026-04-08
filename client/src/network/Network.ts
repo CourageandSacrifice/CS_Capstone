@@ -47,17 +47,15 @@ export async function autoJoin(name: string, spriteKey = 'adventurer'): Promise<
   return setupRoom(r);
 }
 
-export async function createRoom(name: string, isPrivate = false, spriteKey = 'adventurer', maxPlayers = 10): Promise<Room> {
+export async function createRoom(name: string, isPrivate = false, spriteKey = 'adventurer', maxPlayers = 10, clerkId = ''): Promise<Room> {
   const c = initClient();
-  const r = await c.create('my_room', { name, isPrivate, spriteKey, maxPlayers });
+  const r = await c.create('my_room', { name, isPrivate, spriteKey, maxPlayers, clerkId });
   return setupRoom(r);
 }
 
-export async function joinRoom(roomCode: string, name: string, spriteKey = 'adventurer'): Promise<Room> {
+export async function joinRoom(roomCode: string, name: string, spriteKey = 'adventurer', clerkId = ''): Promise<Room> {
   const c = initClient();
-  // joinById does not work reliably with custom this.roomId in Colyseus 0.17.
-  // The server sets roomId = makeRoomCode(), so we join by roomId directly.
-  const r = await c.joinById(roomCode.trim().toUpperCase(), { name, spriteKey });
+  const r = await c.joinById(roomCode.trim().toUpperCase(), { name, spriteKey, clerkId });
   return setupRoom(r);
 }
 
@@ -87,9 +85,9 @@ export function getRoom(): Room | undefined {
   return room;
 }
 
-export async function joinAnyRoom(name: string, spriteKey = 'adventurer'): Promise<Room> {
+export async function joinAnyRoom(name: string, spriteKey = 'adventurer', clerkId = ''): Promise<Room> {
   const c = initClient();
-  const r = await c.join('my_room', { name, isPrivate: false, spriteKey });
+  const r = await c.join('my_room', { name, isPrivate: false, spriteKey, clerkId });
   return setupRoom(r);
 }
 

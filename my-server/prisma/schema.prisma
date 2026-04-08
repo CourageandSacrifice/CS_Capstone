@@ -1,0 +1,29 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  clerkId   String       @id @map("clerk_id")
+  username  String       @default("")
+  email     String       @default("")
+  createdAt DateTime     @default(now()) @map("created_at")
+  stats     PlayerStats?
+
+  @@map("users")
+}
+
+model PlayerStats {
+  clerkId     String   @id @map("clerk_id")
+  totalKills  Int      @default(0) @map("total_kills")
+  totalDeaths Int      @default(0) @map("total_deaths")
+  totalGames  Int      @default(0) @map("total_games")
+  totalWins   Int      @default(0) @map("total_wins")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  user        User     @relation(fields: [clerkId], references: [clerkId], onDelete: Cascade)
+
+  @@map("player_stats")
+}

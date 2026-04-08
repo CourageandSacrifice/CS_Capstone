@@ -11,6 +11,14 @@
 </head>
 <body>
 
+  <!-- ── CLERK AUTH SCREEN ── -->
+  <div id="clerk-auth-screen" class="hidden">
+    <div class="clerk-auth-bg">
+      <div class="clerk-auth-logo">CAMPUS<br>CLASH</div>
+      <div id="clerk-sign-in"></div>
+    </div>
+  </div>
+
   <!-- ── LOGIN SCREEN ── -->
   <div id="login-screen" class="hidden">
     <div class="login-card">
@@ -33,11 +41,18 @@
       <nav class="lobby-nav">
         <button class="nav-tab active" id="nav-lobby">LOBBY</button>
         <button class="nav-tab" id="nav-locker">LOCKER</button>
-        <button class="nav-tab nav-disabled">
-          LEADERBOARD <span class="soon-tag">SOON</span>
-        </button>
+        <button class="nav-tab" id="nav-stats">STATS</button>
       </nav>
-      <button class="change-user-btn" id="change-user-btn">✎ USERNAME</button>
+      <div class="user-profile-area">
+        <img id="user-avatar-img" class="user-avatar-img" src="" alt="avatar" />
+        <div class="user-profile-info">
+          <span id="user-display-name" class="user-display-name"></span>
+          <div class="user-profile-btns">
+            <button class="change-user-btn" id="change-user-btn">✎ NAME</button>
+            <button class="sign-out-btn" id="sign-out-btn">SIGN OUT</button>
+          </div>
+        </div>
+      </div>
     </header>
 
     <div class="lobby-body">
@@ -85,6 +100,7 @@
         <!-- Right: character showcase -->
         <div class="char-showcase-right">
           <div class="char-username" id="lobby-username">PLAYER</div>
+          <div id="lobby-stats" class="lobby-stats"></div>
           <div class="char-label" id="char-name-label">SELECT CHARACTER</div>
           <div class="char-canvas-wrap">
             <canvas id="char-preview" width="1024" height="1024"></canvas>
@@ -96,6 +112,14 @@
 
       <!-- ── Locker panel ── -->
       <div id="locker-panel" class="hidden"></div>
+
+      <!-- ── Stats panel ── -->
+      <div id="stats-panel" class="hidden">
+        <div class="stats-panel-inner">
+          <div class="stats-panel-title">YOUR STATS</div>
+          <div id="stats-panel-content" class="stats-grid-loading">Loading...</div>
+        </div>
+      </div>
 
     </div>
 

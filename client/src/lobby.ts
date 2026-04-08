@@ -1,5 +1,6 @@
 import { CHARACTERS, ClassData } from './data/Classes';
 import { createRoom, joinAnyRoom, joinRoom } from './network/Network';
+import { requireAuth, saveUserToSupabase, getClerk, fetchPlayerStats, PlayerStats } from './auth';
 
 const delay = (ms: number): Promise<void> => new Promise(r => setTimeout(r, ms));
 
@@ -40,6 +41,7 @@ const CHARACTER_KEY = 'cc_character';
 
 export interface LobbyResult {
   username: string;
+  clerkId: string;
   mode: 'host' | 'join';
   isPrivate: boolean;
   roomCode: string;
@@ -47,17 +49,39 @@ export interface LobbyResult {
 }
 
 export function initLobby(): Promise<LobbyResult> {
-  return new Promise((resolve) => {
+  return new Promise(async (resolve) => {
+    const clerk = await requireAuth();
+    const clerkUser = clerk.user!;
+    const clerkId = clerkUser.id;
+    const email = clerkUser.primaryEmailAddress?.emailAddress ?? '';
+    const avatarUrl: string = clerkUser.imageUrl ?? '';
+    const displayName: string =
+      clerkUser.firstName
+        ? `${clerkUser.firstName}${clerkUser.lastName ? ' ' + clerkUser.lastName : ''}`
+        : (clerkUser.username ?? email.split('@')[0] ?? 'Player');
+
     const stored = localStorage.getItem(USERNAME_KEY);
     if (stored) {
-      showLobby(stored, resolve);
+      void saveUserToSupabase(clerkId, stored, email);
+      showLobby(stored, resolve, clerkId, email, avatarUrl, displayName);
     } else {
-      showLogin(resolve);
+      showLogin(resolve, clerkId, email, avatarUrl, displayName);
     }
   });
 }
 
-function showLogin(resolve: (r: LobbyResult) => void): void {
+function setHeaderProfile(avatarUrl: string, displayName: string): void {
+  const img = document.getElementById('user-avatar-img') as HTMLImageElement | null;
+  const nameEl = document.getElementById('user-display-name');
+  if (img) {
+    img.src = avatarUrl;
+    img.style.display = avatarUrl ? 'block' : 'none';
+  }
+  if (nameEl) nameEl.textContent = displayName;
+}
+
+function showLogin(resolve: (r: LobbyResult) => void, clerkId: string, email: string, avatarUrl: string, displayName: string): void {
+  setHeaderProfile(avatarUrl, displayName);
   const screen = document.getElementById('login-screen')!;
   screen.classList.remove('hidden');
 
@@ -72,10 +96,11 @@ function showLogin(resolve: (r: LobbyResult) => void): void {
       return;
     }
     localStorage.setItem(USERNAME_KEY, name);
+    void saveUserToSupabase(clerkId, name, email);
     screen.classList.add('hidden');
     const lobbyScreen = document.getElementById('lobby-screen')!;
     lobbyScreen.classList.add('fade-in');
-    showLobby(name, resolve);
+    showLobby(name, resolve, clerkId, email, avatarUrl, displayName);
   };
 
   btn.addEventListener('click', () => { playMenuClick(); submit(); });
@@ -163,7 +188,7 @@ function buildLockerGrid(
   container.appendChild(grid);
 }
 
-function showLobby(username: string, resolve: (r: LobbyResult) => void): void {
+function showLobby(username: string, resolve: (r: LobbyResult) => void, clerkId: string, _email: string, avatarUrl: string, displayName: string): void {
   const screen = document.getElementById('lobby-screen')!;
   const nameEl = document.getElementById('lobby-username')!;
   const avatarEl = document.getElementById('lobby-avatar')!;
@@ -172,13 +197,49 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void): void {
   avatarEl.textContent = username.slice(0, 2).toUpperCase();
   screen.classList.remove('hidden');
 
+  // Show in-game username in the header (not the Clerk account name)
+  setHeaderProfile(avatarUrl, username);
 
-  // Change username button — clears stored name and reloads to login screen
+  // Fetch stats — populate both the small quick-glance row and the full stats panel
+  void fetchPlayerStats(clerkId).then((stats) => {
+    // Quick-glance row under character preview
+    const statsEl = document.getElementById('lobby-stats');
+    if (statsEl) {
+      if (stats) {
+        const kd = (stats.total_kills / Math.max(stats.total_deaths, 1)).toFixed(2);
+        statsEl.innerHTML =
+          `<span class="stat-item"><span class="stat-val">${stats.total_kills}</span><span class="stat-lbl">KILLS</span></span>` +
+          `<span class="stat-item"><span class="stat-val">${stats.total_deaths}</span><span class="stat-lbl">DEATHS</span></span>` +
+          `<span class="stat-item"><span class="stat-val">${kd}</span><span class="stat-lbl">K/D</span></span>` +
+          `<span class="stat-item"><span class="stat-val">${stats.total_games}</span><span class="stat-lbl">GAMES</span></span>` +
+          `<span class="stat-item"><span class="stat-val">${stats.total_wins}</span><span class="stat-lbl">WINS</span></span>`;
+      } else {
+        statsEl.innerHTML = '<span class="stat-lbl">Play a game to earn stats!</span>';
+      }
+    }
+    // Full stats panel (populated when tab is clicked)
+    renderStatsPanel(stats, username, avatarUrl);
+  });
+
+  // Change in-game name — clears stored nickname and reloads to name input
   const changeUserBtn = document.getElementById('change-user-btn')!;
   changeUserBtn.addEventListener('click', () => {
     playMenuClick();
     localStorage.removeItem(USERNAME_KEY);
     window.location.reload();
+  });
+
+  // Sign out of Clerk entirely
+  const signOutBtn = document.getElementById('sign-out-btn')!;
+  signOutBtn.addEventListener('click', () => {
+    playMenuClick();
+    localStorage.removeItem(USERNAME_KEY);
+    const clerk = getClerk();
+    if (clerk) {
+      clerk.signOut().then(() => window.location.reload()).catch(() => window.location.reload());
+    } else {
+      window.location.reload();
+    }
   });
 
   // ── Character selection ──
@@ -193,25 +254,30 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void): void {
   // ── Nav tabs ──
   const navLobby = document.getElementById('nav-lobby')!;
   const navLocker = document.getElementById('nav-locker')!;
+  const navStats = document.getElementById('nav-stats')!;
   const lobbyStage = document.getElementById('lobby-stage')!;
   const lockerPanel = document.getElementById('locker-panel')!;
+  const statsPanel = document.getElementById('stats-panel')!;
   let lockerBuilt = false;
+
+  const allTabs = [navLobby, navLocker, navStats];
+  const allPanels = [lobbyStage, lockerPanel, statsPanel];
+
+  const switchTab = (activeTab: HTMLElement, activePanel: HTMLElement) => {
+    allTabs.forEach(t => t.classList.remove('active'));
+    allPanels.forEach(p => p.classList.add('hidden'));
+    activeTab.classList.add('active');
+    activePanel.classList.remove('hidden');
+  };
 
   navLobby.addEventListener('click', () => {
     playMenuClick();
-    navLobby.classList.add('active');
-    navLocker.classList.remove('active');
-    lobbyStage.classList.remove('hidden');
-    lockerPanel.classList.add('hidden');
+    switchTab(navLobby, lobbyStage);
   });
 
   navLocker.addEventListener('click', () => {
     playMenuClick();
-    navLocker.classList.add('active');
-    navLobby.classList.remove('active');
-    lobbyStage.classList.add('hidden');
-    lockerPanel.classList.remove('hidden');
-
+    switchTab(navLocker, lockerPanel);
     if (!lockerBuilt) {
       buildLockerGrid(lockerPanel, classData.spriteKey, (newChar) => {
         classData = newChar;
@@ -221,6 +287,11 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void): void {
       });
       lockerBuilt = true;
     }
+  });
+
+  navStats.addEventListener('click', () => {
+    playMenuClick();
+    switchTab(navStats, statsPanel);
   });
 
   let mode: 'host' | 'join' = 'host';
@@ -359,9 +430,9 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void): void {
 
     if (mode === 'host') {
       try {
-        await createRoom(username, isPrivate, classData.spriteKey, maxPlayers);
+        await createRoom(username, isPrivate, classData.spriteKey, maxPlayers, clerkId);
         await launchGame();
-        resolve({ username, mode, isPrivate, roomCode, classData });
+        resolve({ username, clerkId, mode, isPrivate, roomCode, classData });
       } catch (err) {
         console.error('[Campus Clash] createRoom failed:', err);
         playBtn.textContent = 'Connection Failed';
@@ -373,9 +444,9 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void): void {
 
     if (mode === 'join' && randomBtn.classList.contains('active')) {
       try {
-        await joinAnyRoom(username, classData.spriteKey);
+        await joinAnyRoom(username, classData.spriteKey, clerkId);
         await launchGame();
-        resolve({ username, mode, isPrivate, roomCode, classData });
+        resolve({ username, clerkId, mode, isPrivate, roomCode, classData });
       } catch (err) {
         console.error('[Campus Clash] joinAnyRoom failed:', err);
         joinStatus.textContent = 'No Rooms Available';
@@ -390,11 +461,11 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void): void {
     roomCode = roomCodeInput.value.trim().toUpperCase();
     joinStatus.textContent = '';
     try {
-      await joinRoom(roomCode, username, classData.spriteKey);
+      await joinRoom(roomCode, username, classData.spriteKey, clerkId);
       joinStatus.textContent = 'Game Found';
       joinStatus.style.color = '#2ecc71';
       await launchGame();
-      resolve({ username, mode, isPrivate, roomCode, classData });
+      resolve({ username, clerkId, mode, isPrivate, roomCode, classData });
     } catch (err) {
       console.error('[Campus Clash] joinRoom failed:', err);
       joinStatus.textContent = 'Lobby Not Found';
@@ -403,4 +474,74 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void): void {
       resetBtn();
     }
   });
+}
+
+function renderStatsPanel(stats: PlayerStats | null, username: string, avatarUrl: string): void {
+  const container = document.getElementById('stats-panel-content');
+  if (!container) return;
+
+  if (!stats) {
+    container.className = 'stats-empty';
+    container.innerHTML =
+      `<div class="stats-empty-icon">🎮</div>` +
+      `<p class="stats-empty-msg">No stats yet.</p>` +
+      `<p class="stats-empty-sub">Play your first game to start tracking!</p>`;
+    return;
+  }
+
+  const kd = (stats.total_kills / Math.max(stats.total_deaths, 1)).toFixed(2);
+  const winRate = stats.total_games > 0
+    ? ((stats.total_wins / stats.total_games) * 100).toFixed(1)
+    : '0.0';
+  const avgKills = stats.total_games > 0
+    ? (stats.total_kills / stats.total_games).toFixed(1)
+    : '0.0';
+
+  container.className = 'stats-grid';
+  container.innerHTML = `
+    <div class="stats-profile-row">
+      ${avatarUrl ? `<img class="stats-avatar" src="${avatarUrl}" alt="avatar" />` : ''}
+      <div class="stats-profile-name">${username.toUpperCase()}</div>
+    </div>
+
+    <div class="stats-divider"></div>
+
+    <div class="stats-row-label">COMBAT</div>
+    <div class="stats-cards">
+      <div class="stats-card">
+        <div class="stats-card-val">${stats.total_kills}</div>
+        <div class="stats-card-lbl">TOTAL KILLS</div>
+      </div>
+      <div class="stats-card">
+        <div class="stats-card-val">${stats.total_deaths}</div>
+        <div class="stats-card-lbl">TOTAL DEATHS</div>
+      </div>
+      <div class="stats-card stats-card-highlight">
+        <div class="stats-card-val">${kd}</div>
+        <div class="stats-card-lbl">K / D RATIO</div>
+      </div>
+      <div class="stats-card">
+        <div class="stats-card-val">${avgKills}</div>
+        <div class="stats-card-lbl">AVG KILLS/GAME</div>
+      </div>
+    </div>
+
+    <div class="stats-divider"></div>
+
+    <div class="stats-row-label">OVERALL</div>
+    <div class="stats-cards">
+      <div class="stats-card">
+        <div class="stats-card-val">${stats.total_games}</div>
+        <div class="stats-card-lbl">GAMES PLAYED</div>
+      </div>
+      <div class="stats-card">
+        <div class="stats-card-val">${stats.total_wins}</div>
+        <div class="stats-card-lbl">WINS</div>
+      </div>
+      <div class="stats-card stats-card-highlight">
+        <div class="stats-card-val">${winRate}%</div>
+        <div class="stats-card-lbl">WIN RATE</div>
+      </div>
+    </div>
+  `;
 }

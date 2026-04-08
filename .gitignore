@@ -2,3 +2,8 @@ node_modules/
 dist/
 .DS_Store
 *.local
+
+# Server environment files with DB credentials — never commit these
+my-server/.env
+my-server/.env.development
+my-server/.env.production

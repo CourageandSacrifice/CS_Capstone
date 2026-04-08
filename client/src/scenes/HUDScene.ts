@@ -663,6 +663,8 @@ export class HUDScene extends Phaser.Scene {
     const { width, height } = this.scale;
     const cx = width / 2; const cy = height / 2;
 
+    // Stats are now saved server-side in MyRoom.triggerEndGame() via Prisma.
+
     // Remove timer display
     if (this.timerText) { this.timerText.destroy(); this.timerText = undefined; }
 
