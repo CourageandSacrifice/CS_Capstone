@@ -29,6 +29,49 @@ html, body {
 }
 
 /* ═══════════════════════════════════════
+   CLERK AUTH SCREEN
+═══════════════════════════════════════ */
+#clerk-auth-screen {
+  position: fixed; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: url('/lobby-bg.jpg') center center / cover no-repeat;
+  z-index: 200;
+}
+#clerk-auth-screen::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: rgba(0, 0, 0, 0.78);
+}
+.clerk-auth-bg {
+  position: relative; z-index: 1;
+  display: flex; flex-direction: column; align-items: center; gap: 28px;
+}
+.clerk-auth-logo {
+  font-size: 24px; line-height: 1.4; letter-spacing: 2px;
+  color: #c41230;
+  text-shadow: 3px 3px 0 #000, -1px -1px 0 #7a0a1a;
+  text-align: center;
+}
+#clerk-sign-in {
+  min-width: 360px;
+}
+/* Override Clerk card borders to match game style */
+.clerk-card-override {
+  border: 3px solid #c41230 !important;
+  box-shadow: 6px 6px 0 #000 !important;
+  border-radius: 0 !important;
+}
+.clerk-submit-btn {
+  border-radius: 0 !important;
+  font-family: 'Press Start 2P', monospace !important;
+  letter-spacing: 1px;
+}
+.clerk-input {
+  border-radius: 0 !important;
+  font-family: 'Press Start 2P', monospace !important;
+}
+
+/* ═══════════════════════════════════════
    LOGIN SCREEN
 ═══════════════════════════════════════ */
 #login-screen {
@@ -169,17 +212,49 @@ html, body {
 .nav-tab:not(.active):not(.nav-disabled):hover { color: #999; }
 .nav-tab.nav-disabled { cursor: default; opacity: 0.35; }
 
+.user-profile-area {
+  display: flex; align-items: center; gap: 10px;
+}
+.user-avatar-img {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  border: 2px solid #c41230;
+  object-fit: cover;
+  display: none; /* shown by JS once src is set */
+}
+.user-profile-info {
+  display: flex; flex-direction: column; gap: 4px; align-items: flex-end;
+}
+.user-display-name {
+  font-size: 8px; color: #aaaaaa; letter-spacing: 1px;
+  text-transform: uppercase; white-space: nowrap;
+  max-width: 120px; overflow: hidden; text-overflow: ellipsis;
+}
+.user-profile-btns {
+  display: flex; gap: 6px;
+}
 .change-user-btn {
-  padding: 8px 14px;
+  padding: 5px 10px;
   background: transparent;
   border: 1px solid #444;
   color: #888;
-  font-family: inherit; font-size: 8px; letter-spacing: 1px;
+  font-family: inherit; font-size: 7px; letter-spacing: 1px;
   cursor: pointer;
   transition: color 0.15s, border-color 0.15s;
   white-space: nowrap;
 }
 .change-user-btn:hover { color: #c41230; border-color: #c41230; }
+.sign-out-btn {
+  padding: 5px 10px;
+  background: transparent;
+  border: 1px solid #444;
+  color: #888;
+  font-family: inherit; font-size: 7px; letter-spacing: 1px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+.sign-out-btn:hover { color: #e63946; border-color: #e63946; }
 
 .soon-tag {
   font-size: 7px; letter-spacing: 1px;
@@ -335,6 +410,27 @@ html, body {
   white-space: nowrap; text-transform: uppercase;
 }
 
+/* Player stats row */
+.lobby-stats {
+  position: absolute; top: calc(14% + 26px); left: 50%; transform: translateX(-50%);
+  z-index: 10;
+  display: flex; gap: 10px; align-items: flex-start; justify-content: center;
+  white-space: nowrap;
+  min-height: 28px;
+}
+.stat-item {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  background: rgba(0,0,0,0.55);
+  border: 1px solid rgba(196,18,48,0.35);
+  padding: 4px 8px;
+}
+.stat-val {
+  font-size: 11px; color: #ffd700; letter-spacing: 1px;
+}
+.stat-lbl {
+  font-size: 6px; color: #666676; letter-spacing: 2px;
+}
+
 /* Character class label */
 .char-label {
   font-size: 8px; letter-spacing: 3px;
@@ -367,6 +463,86 @@ html, body {
   flex: 1; overflow-y: auto;
   padding: 24px 32px;
   background: rgba(10, 10, 10, 0.82);
+}
+
+/* ═══════════════════════════════════════
+   STATS PANEL
+═══════════════════════════════════════ */
+#stats-panel {
+  flex: 1; overflow-y: auto;
+  padding: 32px 48px;
+  background: rgba(10, 10, 10, 0.82);
+}
+.stats-panel-inner {
+  max-width: 720px; margin: 0 auto;
+}
+.stats-panel-title {
+  font-size: 18px; letter-spacing: 4px; color: #c41230;
+  text-shadow: 3px 3px 0 #000;
+  margin-bottom: 28px;
+}
+.stats-profile-row {
+  display: flex; align-items: center; gap: 16px;
+  margin-bottom: 20px;
+}
+.stats-avatar {
+  width: 56px; height: 56px; border-radius: 50%;
+  border: 3px solid #c41230;
+  object-fit: cover;
+}
+.stats-profile-name {
+  font-size: 22px; color: #ffd700; letter-spacing: 3px;
+  text-shadow: 3px 3px 0 #000;
+}
+.stats-divider {
+  height: 1px; background: linear-gradient(to right, #c41230, transparent);
+  margin: 18px 0 14px;
+}
+.stats-row-label {
+  font-size: 8px; color: #666676; letter-spacing: 3px;
+  margin-bottom: 12px;
+}
+.stats-cards {
+  display: flex; gap: 12px; flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.stats-card {
+  flex: 1; min-width: 120px;
+  background: #0d0d0d;
+  border: 2px solid #1e1e1e;
+  padding: 18px 16px;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  transition: border-color 0.15s;
+}
+.stats-card:hover { border-color: #444; }
+.stats-card-highlight {
+  border-color: #c41230 !important;
+  background: #130505;
+}
+.stats-card-val {
+  font-size: 28px; color: #ffffff; letter-spacing: 1px;
+  text-shadow: 2px 2px 0 #000;
+}
+.stats-card-highlight .stats-card-val { color: #ffd700; }
+.stats-card-lbl {
+  font-size: 7px; color: #666676; letter-spacing: 2px;
+  text-align: center;
+}
+.stats-empty {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 14px;
+  padding-top: 80px; text-align: center;
+}
+.stats-empty-icon { font-size: 48px; }
+.stats-empty-msg {
+  font-size: 14px; color: #888898; letter-spacing: 2px;
+}
+.stats-empty-sub {
+  font-size: 9px; color: #444456; letter-spacing: 1px;
+}
+.stats-grid-loading {
+  font-size: 9px; color: #444456; letter-spacing: 2px;
+  padding-top: 40px;
 }
 
 .locker-grid {
