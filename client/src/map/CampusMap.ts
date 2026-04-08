@@ -469,31 +469,50 @@ export function buildBitmaskFromImageData(imageData: ImageData, imgW: number, im
   return mask;
 }
 
-const MAP_BORDER = 3;
+const MAP_BORDER_SIDE   = 5;
+const MAP_BORDER_TOP    = 15;
+const MAP_BORDER_BOTTOM = 5;
 
 export function isWalkable(tileX: number, tileY: number): boolean {
   if (_gamePhase === 'waiting') {
     return tileX > 0 && tileX < 19 && tileY > 0 && tileY < 19;
   }
-  if (tileX < MAP_BORDER || tileX >= MAP_W - MAP_BORDER ||
-      tileY < MAP_BORDER || tileY >= MAP_H - MAP_BORDER) return false;
+  if (tileX < MAP_BORDER_SIDE || tileX >= MAP_W - MAP_BORDER_SIDE ||
+      tileY < MAP_BORDER_TOP  || tileY >= MAP_H - MAP_BORDER_BOTTOM) return false;
   if (_walkBitmask === null) return false;
   return _walkBitmask[tileY][tileX];
 }
 
-/** Spiral outward from a world position until a walkable tile is found. */
-export function findSafeSpawn(worldX: number, worldY: number): { x: number; y: number } {
+/** Returns true if a tile and all tiles within `clearance` radius are walkable. */
+function hasClearance(tileX: number, tileY: number, clearance: number): boolean {
+  for (let dx = -clearance; dx <= clearance; dx++) {
+    for (let dy = -clearance; dy <= clearance; dy++) {
+      if (!isWalkable(tileX + dx, tileY + dy)) return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Spiral outward from a world position until a walkable tile with clearance is found.
+ * `clearance` = number of tiles of open space required in all directions (default 2).
+ * Falls back to clearance=1 then clearance=0 if no clear tile is found within radius.
+ */
+export function findSafeSpawn(worldX: number, worldY: number, clearance = 2): { x: number; y: number } {
   const startTX = Math.floor(worldX / TILE_SIZE);
   const startTY = Math.floor(worldY / TILE_SIZE);
-  if (isWalkable(startTX, startTY)) return { x: worldX, y: worldY };
-  for (let r = 1; r <= 30; r++) {
-    for (let dx = -r; dx <= r; dx++) {
-      for (let dy = -r; dy <= r; dy++) {
-        if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
-        const tx = startTX + dx;
-        const ty = startTY + dy;
-        if (isWalkable(tx, ty)) {
-          return { x: tx * TILE_SIZE + TILE_SIZE / 2, y: ty * TILE_SIZE + TILE_SIZE / 2 };
+
+  for (let c = clearance; c >= 0; c--) {
+    if (hasClearance(startTX, startTY, c)) return { x: worldX, y: worldY };
+    for (let r = 1; r <= 30; r++) {
+      for (let dx = -r; dx <= r; dx++) {
+        for (let dy = -r; dy <= r; dy++) {
+          if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+          const tx = startTX + dx;
+          const ty = startTY + dy;
+          if (hasClearance(tx, ty, c)) {
+            return { x: tx * TILE_SIZE + TILE_SIZE / 2, y: ty * TILE_SIZE + TILE_SIZE / 2 };
+          }
         }
       }
     }

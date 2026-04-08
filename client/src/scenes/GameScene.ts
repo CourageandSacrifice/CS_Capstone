@@ -12,7 +12,7 @@ import {
 import { ClassData, DEFAULT_CLASS, CHARACTERS } from '../data/Classes';
 import { Player } from '../entities/Player';
 import { RemotePlayer } from '../entities/RemotePlayer';
-import { sendPosition, sendAttack, sendSwing, sendEndGame, sendFireball, sendFireballLaunched } from '../network/Network';
+import { sendPosition, sendAttack, sendSwing, sendEndGame, sendFireball, sendFireballLaunched, sendPickupCollect, sendPickupRespawnPos } from '../network/Network';
 import { Room, getStateCallbacks } from '@colyseus/sdk';
 
 interface ActiveProjectile {
@@ -437,6 +437,50 @@ export class GameScene extends Phaser.Scene {
         traveled: 0, flickering: false, flickerTimer: 0,
       });
     });
+
+    room.onMessage('pickupCollected', (data: { type: string; idx: number; collectorId: string }) => {
+      const items = data.type === 'fireball' ? this.pickupItems : this.healthPickups;
+      const item = items[data.idx];
+      if (!item) return;
+      item.active = false;
+      item.tween?.stop();
+      item.sprite.setVisible(false);
+      // Only apply the effect to the player who picked it up
+      if (data.collectorId === room.sessionId) {
+        if (data.type === 'fireball') {
+          this.fireballCount = Math.min(this.fireballCount + 1, this.MAX_FIREBALLS);
+          this.events.emit('inventoryChanged', this.fireballCount);
+        } else {
+          this.player.hp = Math.min(this.player.hp + 20, this.player.maxHp);
+          this.events.emit('playerHpChanged', this.player.hp, this.player.maxHp);
+        }
+      }
+    });
+
+    room.onMessage('pickupNeedsRespawn', (data: { type: string; idx: number }) => {
+      // Only the host handles this message — pick a new position and send it back
+      const pos = this.randomWalkableTile();
+      sendPickupRespawnPos(data.type, data.idx, pos.wx, pos.wy);
+    });
+
+    room.onMessage('pickupRespawned', (data: { type: string; idx: number; wx: number; wy: number }) => {
+      const items = data.type === 'fireball' ? this.pickupItems : this.healthPickups;
+      const item = items[data.idx];
+      if (!item) return;
+      item.worldX = data.wx;
+      item.worldY = data.wy;
+      item.sprite.setPosition(data.wx, data.wy);
+      item.sprite.setVisible(true);
+      item.active = true;
+      item.tween = this.tweens.add({
+        targets: item.sprite,
+        y: data.wy - 5,
+        duration: 900,
+        ease: 'Sine.easeInOut',
+        yoyo: true,
+        repeat: -1,
+      });
+    });
   }
 
   setCountdownActive(v: boolean): void {
@@ -857,49 +901,29 @@ export class GameScene extends Phaser.Scene {
 
   private checkPickupCollisions(): void {
     if (this.fireballCount < this.MAX_FIREBALLS) {
-      for (const item of this.pickupItems) {
+      for (let i = 0; i < this.pickupItems.length; i++) {
+        const item = this.pickupItems[i];
         if (!item.active) continue;
         const dist = Phaser.Math.Distance.Between(
           this.player.x, this.player.y, item.worldX, item.worldY,
         );
         if (dist < 18) {
-          item.active = false;
-          item.tween?.stop();
-          item.sprite.setVisible(false);
-          this.fireballCount = Math.min(this.fireballCount + 1, this.MAX_FIREBALLS);
-          this.events.emit('inventoryChanged', this.fireballCount);
-          const idx = this.pickupItems.indexOf(item);
-          this.time.delayedCall(20000, () => {
-            if (idx !== -1) {
-              item.sprite.destroy();
-              this.pickupItems.splice(idx, 1);
-            }
-            this.spawnPickupAt(this.randomWalkableTile());
-          });
+          sendPickupCollect('fireball', i);
+          break; // server will broadcast back to all clients
         }
       }
     }
 
-    for (const item of this.healthPickups) {
+    for (let i = 0; i < this.healthPickups.length; i++) {
+      const item = this.healthPickups[i];
       if (!item.active) continue;
       if (this.player.hp >= this.player.maxHp) continue;
       const dist = Phaser.Math.Distance.Between(
         this.player.x, this.player.y, item.worldX, item.worldY,
       );
       if (dist < 18) {
-        item.active = false;
-        item.tween?.stop();
-        item.sprite.setVisible(false);
-        this.player.hp = Math.min(this.player.hp + 20, this.player.maxHp);
-        this.events.emit('playerHpChanged', this.player.hp, this.player.maxHp);
-        const idx = this.healthPickups.indexOf(item);
-        this.time.delayedCall(20000, () => {
-          if (idx !== -1) {
-            item.sprite.destroy();
-            this.healthPickups.splice(idx, 1);
-          }
-          this.spawnHealthPickupAt(this.randomWalkableTile());
-        });
+        sendPickupCollect('health', i);
+        break;
       }
     }
   }

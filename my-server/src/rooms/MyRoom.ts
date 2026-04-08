@@ -108,9 +108,12 @@ export class MyRoom extends Room {
       const y = Number(message.y);
       if (isNaN(x) || isNaN(y)) return;
 
-      // Clamp to world bounds
-      player.x = Math.max(0, Math.min(WORLD_W, x));
-      player.y = Math.max(0, Math.min(WORLD_H, y));
+      // Clamp to world bounds with border padding (top=15 tiles, others=5 tiles)
+      const SIDE_PX   = 5  * TILE_SIZE;
+      const TOP_PX    = 15 * TILE_SIZE;
+      const BOTTOM_PX = 5  * TILE_SIZE;
+      player.x = Math.max(SIDE_PX,  Math.min(WORLD_W - SIDE_PX,   x));
+      player.y = Math.max(TOP_PX,   Math.min(WORLD_H - BOTTOM_PX, y));
     },
 
     attack: (client: Client, message: { targetId: string; dirX?: number; dirY?: number }) => {
@@ -231,6 +234,33 @@ export class MyRoom extends Room {
           target.hp = target.maxHp; target.alive = true;
         }, RESPAWN_DELAY);
       }
+    },
+
+    pickupCollect: (client: Client, message: { type: string; idx: number }) => {
+      if (this.state.phase !== 'playing') return;
+      const type = String(message.type);
+      const idx  = Number(message.idx);
+      if (type !== 'fireball' && type !== 'health') return;
+      // Broadcast collection to all clients (including sender)
+      this.broadcast('pickupCollected', { type, idx, collectorId: client.sessionId });
+      // After respawn delay, ask the host to provide a new position
+      this.clock.setTimeout(() => {
+        const hostClient = this.clients.find(c => c.sessionId === this.hostId);
+        if (hostClient) {
+          hostClient.send('pickupNeedsRespawn', { type, idx });
+        }
+      }, 20000);
+    },
+
+    pickupRespawnPos: (client: Client, message: { type: string; idx: number; wx: number; wy: number }) => {
+      // Only the host sends respawn positions
+      if (client.sessionId !== this.hostId) return;
+      const type = String(message.type);
+      const idx  = Number(message.idx);
+      const wx   = Number(message.wx);
+      const wy   = Number(message.wy);
+      if (type !== 'fireball' && type !== 'health') return;
+      this.broadcast('pickupRespawned', { type, idx, wx, wy });
     },
 
     endGame: (client: Client) => {
