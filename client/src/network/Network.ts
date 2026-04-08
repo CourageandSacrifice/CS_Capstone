@@ -116,6 +116,16 @@ export function sendFireballLaunched(x: number, y: number, dirX: number, dirY: n
   room.send('fireballLaunched', { x, y, dirX, dirY });
 }
 
+export function sendPickupCollect(type: string, idx: number): void {
+  if (!room) return;
+  room.send('pickupCollect', { type, idx });
+}
+
+export function sendPickupRespawnPos(type: string, idx: number, wx: number, wy: number): void {
+  if (!room) return;
+  room.send('pickupRespawnPos', { type, idx, wx, wy });
+}
+
 export function sendEndGame(): void {
   if (!room) return;
   room.send('endGame');

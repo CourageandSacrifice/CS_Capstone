@@ -10,7 +10,7 @@
     "build:sandbox": "node scripts/build-sandbox.mjs"
   },
   "dependencies": {
-    "@clerk/clerk-js": "^6.4.0",
+    "@clerk/clerk-js": "^6.5.0",
     "@colyseus/sdk": "^0.17.31",
     "phaser": "^3.90.0",
     "vercel": "^50.26.1"
