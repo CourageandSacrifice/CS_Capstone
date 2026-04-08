@@ -467,6 +467,8 @@ export class GameScene extends Phaser.Scene {
       const items = data.type === 'fireball' ? this.pickupItems : this.healthPickups;
       const item = items[data.idx];
       if (!item) return;
+      // Kill any lingering tweens on this sprite so the new bounce starts cleanly
+      this.tweens.killTweensOf(item.sprite);
       item.worldX = data.wx;
       item.worldY = data.wy;
       item.sprite.setPosition(data.wx, data.wy);
@@ -746,6 +748,31 @@ export class GameScene extends Phaser.Scene {
 
   private randomWalkableTile(): { wx: number; wy: number } {
     if (this.validPickupTiles.length > 0 && this.pickupRng) {
+      // Reject positions that are too close to any existing active pickup so
+      // items spread out across the map instead of clustering.
+      const MIN_DIST = 320; // px — ~20 tiles of separation
+      const MIN_DIST_SQ = MIN_DIST * MIN_DIST;
+      for (let attempt = 0; attempt < 40; attempt++) {
+        const idx = Math.floor(this.pickupRng() * this.validPickupTiles.length);
+        const candidate = this.validPickupTiles[idx];
+        let tooClose = false;
+        for (const p of this.pickupItems) {
+          if (!p.active) continue;
+          const dx = p.worldX - candidate.wx;
+          const dy = p.worldY - candidate.wy;
+          if (dx * dx + dy * dy < MIN_DIST_SQ) { tooClose = true; break; }
+        }
+        if (!tooClose) {
+          for (const p of this.healthPickups) {
+            if (!p.active) continue;
+            const dx = p.worldX - candidate.wx;
+            const dy = p.worldY - candidate.wy;
+            if (dx * dx + dy * dy < MIN_DIST_SQ) { tooClose = true; break; }
+          }
+        }
+        if (!tooClose) return candidate;
+      }
+      // Give up after 40 attempts — return the last candidate
       const idx = Math.floor(this.pickupRng() * this.validPickupTiles.length);
       return this.validPickupTiles[idx];
     }
@@ -908,8 +935,9 @@ export class GameScene extends Phaser.Scene {
           this.player.x, this.player.y, item.worldX, item.worldY,
         );
         if (dist < 18) {
+          item.active = false; // prevent re-sending while awaiting server echo
           sendPickupCollect('fireball', i);
-          break; // server will broadcast back to all clients
+          break;
         }
       }
     }
@@ -922,6 +950,7 @@ export class GameScene extends Phaser.Scene {
         this.player.x, this.player.y, item.worldX, item.worldY,
       );
       if (dist < 18) {
+        item.active = false;
         sendPickupCollect('health', i);
         break;
       }
