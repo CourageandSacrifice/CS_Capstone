@@ -11,6 +11,7 @@ import {
  * Import your Room files
  */
 import { MyRoom } from "./rooms/MyRoom.js";
+import prisma from "./db.js";
 
 const server = defineServer({
 
@@ -50,6 +51,47 @@ const server = defineServer({
 
         app.get("/hi", (req, res) => {
             res.send("It's time to kick ass and chew bubblegum!");
+        });
+
+        // ── Player stats API ──────────────────────────────────────────────
+
+        // Sync user record on login (creates or updates username)
+        app.post("/api/users/sync", async (req, res) => {
+            try {
+                const { clerkId, username, email } = req.body ?? {};
+                if (!clerkId) return res.status(400).json({ error: "clerkId required" });
+
+                await prisma.user.upsert({
+                    where: { clerkId },
+                    create: { clerkId, username: username ?? "", email: email ?? "" },
+                    update: { username: username ?? "", email: email ?? "" },
+                });
+
+                res.json({ ok: true });
+            } catch (err) {
+                console.error("[api] /api/users/sync error:", err);
+                res.status(500).json({ error: "Internal server error" });
+            }
+        });
+
+        // Fetch a player's cumulative stats
+        app.get("/api/stats/:clerkId", async (req, res) => {
+            try {
+                const { clerkId } = req.params;
+                const stats = await prisma.playerStats.findUnique({ where: { clerkId } });
+
+                if (!stats) return res.json(null);
+
+                res.json({
+                    total_kills:  stats.totalKills,
+                    total_deaths: stats.totalDeaths,
+                    total_games:  stats.totalGames,
+                    total_wins:   stats.totalWins,
+                });
+            } catch (err) {
+                console.error("[api] /api/stats error:", err);
+                res.status(500).json({ error: "Internal server error" });
+            }
         });
 
         /**

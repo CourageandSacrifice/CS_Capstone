@@ -8,6 +8,10 @@
  * See: https://docs.colyseus.io/server
  */
 import { listen } from "@colyseus/tools";
+import { config as loadEnv } from "dotenv";
+
+// Load .env file for local dev (Docker supplies env vars directly in production)
+loadEnv();
 
 // Import Colyseus config
 import app from "./app.config.js";

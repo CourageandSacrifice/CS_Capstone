@@ -1,5 +1,6 @@
 import { Room, Client, CloseCode } from "colyseus";
 import { MyRoomState, PlayerState } from "./schema/MyRoomState.js";
+import prisma from "../db.js";
 
 // Generate a short memorable room code like "FIRE" or "WOLF"
 const WORDS = [
@@ -18,14 +19,61 @@ const MAP_H = 100;
 const WORLD_W = MAP_W * TILE_SIZE;
 const WORLD_H = MAP_H * TILE_SIZE;
 
-// Safe spawn zone: true center of map (tile 75,50), clear of all buildings.
-// Clear of all buildings — pixel coords ~1088–1328 x, ~704–928 y.
+// Safe spawn zone for respawns: center of map, clear of buildings.
 const SPAWN_ZONE = { xMin: 68, xMax: 82, yMin: 44, yMax: 58 };
 
+const SPAWN_ZONE_BLOCKED = new Set<string>([
+    "81,48", "81,49",
+  ]);
+
+function isSpawnTileWalkable(tx: number, ty: number): boolean {
+  return !SPAWN_ZONE_BLOCKED.has(`${tx},${ty}`);
+}
+
 function gameSpawnPoint(): { x: number; y: number } {
-  const tx = SPAWN_ZONE.xMin + Math.floor(Math.random() * (SPAWN_ZONE.xMax - SPAWN_ZONE.xMin + 1));
-  const ty = SPAWN_ZONE.yMin + Math.floor(Math.random() * (SPAWN_ZONE.yMax - SPAWN_ZONE.yMin + 1));
+  let tx: number, ty: number;
+  let attempts = 0;
+  do {
+    tx = SPAWN_ZONE.xMin + Math.floor(Math.random() * (SPAWN_ZONE.xMax - SPAWN_ZONE.xMin + 1));
+    ty = SPAWN_ZONE.yMin + Math.floor(Math.random() * (SPAWN_ZONE.yMax - SPAWN_ZONE.yMin + 1));
+    attempts++;
+  } while (!isSpawnTileWalkable(tx, ty) && attempts < 100);
   return { x: tx * TILE_SIZE + TILE_SIZE / 2, y: ty * TILE_SIZE + TILE_SIZE / 2 };
+}
+
+/**
+ * Generate spread-out spawn points for game start using a jittered grid.
+ * Divides the playable map into a grid of cells and picks one random point
+ * per cell, guaranteeing players start far from each other.
+ */
+function gameStartSpawnPoints(count: number): { x: number; y: number }[] {
+  const MARGIN = 8; // tile margin from map edges
+  const usableW = MAP_W - 2 * MARGIN; // 134 tiles
+  const usableH = MAP_H - 2 * MARGIN; // 84 tiles
+
+  const cols = Math.ceil(Math.sqrt(count));
+  const rows = Math.ceil(count / cols);
+  const cellW = Math.floor(usableW / cols);
+  const cellH = Math.floor(usableH / rows);
+
+  // Build a shuffled list of grid cells
+  const cells: { col: number; row: number }[] = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      cells.push({ col: c, row: r });
+    }
+  }
+  for (let i = cells.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [cells[i], cells[j]] = [cells[j], cells[i]];
+  }
+
+  return cells.slice(0, count).map(({ col, row }) => {
+    // Pick a random tile within the cell (with 1-tile inner padding)
+    const tx = MARGIN + col * cellW + 1 + Math.floor(Math.random() * Math.max(1, cellW - 2));
+    const ty = MARGIN + row * cellH + 1 + Math.floor(Math.random() * Math.max(1, cellH - 2));
+    return { x: tx * TILE_SIZE + TILE_SIZE / 2, y: ty * TILE_SIZE + TILE_SIZE / 2 };
+  });
 }
 
 const ATTACK_DAMAGE = 20;
@@ -57,6 +105,8 @@ export class MyRoom extends Room {
   private joinOrder: string[] = []; // tracks join order for host migration
   private autoEndTimer?: ReturnType<typeof this.clock.setTimeout>;
   private tickInterval?: ReturnType<typeof this.clock.setInterval>;
+  // Maps sessionId → clerkId (not synced to clients, server-only)
+  private playerClerkIds = new Map<string, string>();
 
   private transferHost(): void {
     const next = this.joinOrder[0];
@@ -211,9 +261,10 @@ export class MyRoom extends Room {
           if (this.state.timeRemaining > 0) this.state.timeRemaining--;
         }, 1000);
       }, 4000);
-      let i = 0;
+      const spawnPoints = gameStartSpawnPoints(this.state.players.size);
+      let spawnIdx = 0;
       this.state.players.forEach((player) => {
-        const spawn = gameSpawnPoint();
+        const spawn = spawnPoints[spawnIdx++] ?? gameSpawnPoint();
         player.x = spawn.x;
         player.y = spawn.y;
         player.hp = player.maxHp;
@@ -223,12 +274,56 @@ export class MyRoom extends Room {
     },
   }
 
-  private triggerEndGame(timeLimitReached = false): void {
+  private async triggerEndGame(timeLimitReached = false): Promise<void> {
     if (this.tickInterval) { this.tickInterval.clear(); this.tickInterval = undefined; }
     this.state.timeLimitReached = timeLimitReached;
     this.state.gameOver = true;
     this.state.gameEndTime = 0;
     this.state.timeRemaining = 0;
+
+    // Persist stats for every player that has a clerkId
+    let topKills = -1;
+    this.state.players.forEach((p) => { if (p.kills > topKills) topKills = p.kills; });
+
+    const saves: Promise<void>[] = [];
+    this.state.players.forEach((player, sessionId) => {
+      const clerkId = this.playerClerkIds.get(sessionId);
+      if (!clerkId) return;
+      const won = player.kills === topKills && topKills >= 0;
+      saves.push(
+        (async () => {
+          try {
+            // Ensure the user row exists first (FK requirement)
+            await prisma.user.upsert({
+              where: { clerkId },
+              create: { clerkId, username: player.name },
+              update: { username: player.name },
+            });
+            // Atomically increment stats — no read needed
+            await prisma.playerStats.upsert({
+              where: { clerkId },
+              create: {
+                clerkId,
+                totalKills: player.kills,
+                totalDeaths: player.deaths,
+                totalGames: 1,
+                totalWins: won ? 1 : 0,
+              },
+              update: {
+                totalKills:  { increment: player.kills },
+                totalDeaths: { increment: player.deaths },
+                totalGames:  { increment: 1 },
+                totalWins:   { increment: won ? 1 : 0 },
+              },
+            });
+            console.log(`[stats] saved for ${player.name} — K:${player.kills} D:${player.deaths} W:${won}`);
+          } catch (err) {
+            console.error(`[stats] failed for ${player.name}:`, err);
+          }
+        })()
+      );
+    });
+    await Promise.all(saves);
 
     // After 5s, reset room to waiting instead of disconnecting
     this.clock.setTimeout(() => {
@@ -267,6 +362,11 @@ export class MyRoom extends Room {
     if (!this.hostId) {
       this.hostId = client.sessionId;
       this.state.hostSessionId = client.sessionId;
+    }
+
+    // Store clerkId for stats saving on game end (not broadcast to other clients)
+    if (typeof options?.clerkId === "string" && options.clerkId) {
+      this.playerClerkIds.set(client.sessionId, options.clerkId);
     }
 
     const spawn = this.state.phase === "waiting"
@@ -318,6 +418,7 @@ export class MyRoom extends Room {
     this.lastAttackTime.delete(client.sessionId);
     this.lastHitTime.delete(client.sessionId);
     this.lastSwingTime.delete(client.sessionId);
+    this.playerClerkIds.delete(client.sessionId);
 
     if (wasHost) this.transferHost();
     console.log(client.sessionId, "left! Players:", this.state.players.size);

@@ -41,7 +41,7 @@ export class HUDScene extends Phaser.Scene {
   private startGameBtn?: Phaser.GameObjects.Container;
 
   private inventoryContainer?: Phaser.GameObjects.Container;
-  private inventorySlotImages: (Phaser.GameObjects.Image | null)[] = [null, null, null];
+  private inventorySlotImages: (Phaser.GameObjects.Sprite | null)[] = [null, null, null];
 
   private readonly MINIMAP_W = 160;
   private readonly MINIMAP_H = 120;
@@ -663,6 +663,8 @@ export class HUDScene extends Phaser.Scene {
     const { width, height } = this.scale;
     const cx = width / 2; const cy = height / 2;
 
+    // Stats are now saved server-side in MyRoom.triggerEndGame() via Prisma.
+
     // Remove timer display
     if (this.timerText) { this.timerText.destroy(); this.timerText = undefined; }
 
@@ -774,8 +776,9 @@ export class HUDScene extends Phaser.Scene {
       slot.fillRect(sx + 1, -SLOT_SIZE / 2 + 1, SLOT_SIZE - 2, SLOT_SIZE - 2);
       container.add(slot);
 
-      const img = this.add.image(sx + SLOT_SIZE / 2, 0, 'fireball-pickup');
-      img.setDisplaySize(SLOT_SIZE - 6, SLOT_SIZE - 6).setVisible(false);
+      const img = this.add.sprite(sx + SLOT_SIZE / 2, 0, 'fireball');
+      img.setDisplaySize(SLOT_SIZE - 4, SLOT_SIZE - 4).setVisible(false);
+      img.play('fireball_fly');
       container.add(img);
       this.inventorySlotImages[i] = img;
     }
