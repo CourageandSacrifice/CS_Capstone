@@ -21,7 +21,12 @@ function setupRoom(r: Room): Room {
   // Store reconnection token for page refresh recovery
   sessionStorage.setItem(TOKEN_KEY, room.reconnectionToken);
 
+  // Leave the room cleanly when the tab is closed or refreshed
+  const leaveOnUnload = () => { try { room.leave(true); } catch {} };
+  window.addEventListener('beforeunload', leaveOnUnload);
+
   room.onLeave((code) => {
+    window.removeEventListener('beforeunload', leaveOnUnload);
     console.log('Left room. Code:', code);
     // Code 1000 = normal close (intentional leave)
     if (code === 1000) {
