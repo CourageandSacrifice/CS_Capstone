@@ -47,7 +47,17 @@ function gameStartSpawnPoints(count: number): { x: number; y: number }[] {
   return result;
 }
 
-const ATTACK_DAMAGE = 20;
+const CLASS_STATS: Record<string, { maxHp: number; attackDamage: number }> = {
+  adventurer: { maxHp: 100, attackDamage: 22 },
+  scout:      { maxHp: 75,  attackDamage: 15 },
+  lancer:     { maxHp: 125, attackDamage: 30 },
+};
+const DEFAULT_STATS = CLASS_STATS.adventurer;
+
+function getClassStats(spriteKey: string) {
+  return CLASS_STATS[spriteKey] ?? DEFAULT_STATS;
+}
+
 const ATTACK_RANGE = 54;
 const ATTACK_RATE = 450;
 const HIT_COOLDOWN = 200; // how often a player can be hit
@@ -152,7 +162,9 @@ export class MyRoom extends Room {
       this.lastAttackTime.set(client.sessionId, now);
       this.lastHitTime.set(targetId, now);
 
-      target.hp -= ATTACK_DAMAGE;
+      const meleeDmg = getClassStats(attacker.spriteKey).attackDamage;
+      target.hp -= meleeDmg;
+      this.broadcast('damageDealt', { x: target.x, y: target.y, damage: meleeDmg, type: 'melee' });
       if (target.hp <= 0) {
         target.hp = 0;
         target.alive = false;
@@ -221,6 +233,7 @@ export class MyRoom extends Room {
       if (Math.sqrt(dx * dx + dy * dy) > FIREBALL_RANGE) return;
 
       target.hp -= FIREBALL_DAMAGE;
+      this.broadcast('damageDealt', { x: target.x, y: target.y, damage: FIREBALL_DAMAGE, type: 'fireball' });
       if (target.hp <= 0) {
         target.hp = 0;
         target.alive = false;
@@ -404,19 +417,22 @@ export class MyRoom extends Room {
     const color = PLAYER_COLORS[this.playerIndex % PLAYER_COLORS.length];
     this.playerIndex++;
 
+    const spriteKey = (typeof options?.spriteKey === "string" && options.spriteKey.trim())
+      ? options.spriteKey.trim()
+      : "adventurer";
+    const stats = getClassStats(spriteKey);
+
     const player = new PlayerState();
     player.x = spawn.x;
     player.y = spawn.y;
     player.color = color;
-    player.hp = 100;
-    player.maxHp = 100;
+    player.hp = stats.maxHp;
+    player.maxHp = stats.maxHp;
     player.alive = true;
     player.name = (typeof options?.name === "string" && options.name.trim())
       ? options.name.trim().slice(0, 16)
       : `Player${this.playerIndex}`;
-    player.spriteKey = (typeof options?.spriteKey === "string" && options.spriteKey.trim())
-      ? options.spriteKey.trim()
-      : "archer";
+    player.spriteKey = spriteKey;
 
     this.state.players.set(client.sessionId, player);
     console.log(client.sessionId, `joined as "${player.name}"! Players:`, this.state.players.size);
