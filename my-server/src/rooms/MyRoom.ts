@@ -47,13 +47,27 @@ function gameStartSpawnPoints(count: number): { x: number; y: number }[] {
   return result;
 }
 
-const ATTACK_DAMAGE = 20;
+const CLASS_STATS: Record<string, { maxHp: number; attackDamage: number }> = {
+  adventurer: { maxHp: 100, attackDamage: 22 },
+  scout:      { maxHp: 75,  attackDamage: 15 },
+  lancer:     { maxHp: 125, attackDamage: 30 },
+};
+const DEFAULT_STATS = CLASS_STATS.adventurer;
+
+function getClassStats(spriteKey: string) {
+  return CLASS_STATS[spriteKey] ?? DEFAULT_STATS;
+}
+
 const ATTACK_RANGE = 54;
 const ATTACK_RATE = 450;
 const HIT_COOLDOWN = 200; // how often a player can be hit
 const RESPAWN_DELAY = 5000;
 const FIREBALL_DAMAGE = 40;
 const FIREBALL_RANGE  = 600; // generous buffer for network latency — client validates visual hit
+
+const TAG_EXPIRE_TIME = 15000;  // 15 seconds
+const KC_SCORE_LIMIT = 20;
+const TAG_COLLECT_RANGE = 24;
 
 const PLAYER_COLORS = [0x3498db, 0xe74c3c, 0x2ecc71, 0xf39c12];
 
@@ -79,6 +93,9 @@ export class MyRoom extends Room {
   private emptyRoomTimer?: ReturnType<typeof this.clock.setTimeout>;
   // Maps sessionId → clerkId (not synced to clients, server-only)
   private playerClerkIds = new Map<string, string>();
+  private gameMode = 'ffa';
+  private tagCounter = 0;
+  private activeTags = new Map<number, { id: number; x: number; y: number; killerId: string; victimId: string; timer: any }>();
 
   private scheduleEmptyDispose(): void {
     if (this.emptyRoomTimer) { this.emptyRoomTimer.clear(); this.emptyRoomTimer = undefined; }
@@ -97,6 +114,28 @@ export class MyRoom extends Room {
       this.state.hostSessionId = next;
       console.log(`Host transferred to ${next}`);
     }
+  }
+
+  private updateMetadata(): void {
+    this.setMetadata({
+      gameMode: this.gameMode,
+      roomCode: this.state.roomCode,
+      maxPlayers: this.state.maxPlayers,
+      isPrivate: false,
+      phase: this.state.phase,
+      playerCount: this.state.players.size,
+      timeRemaining: this.state.timeRemaining,
+    });
+  }
+
+  private dropTag(x: number, y: number, killerId: string, victimId: string): void {
+    const tagId = ++this.tagCounter;
+    const timer = this.clock.setTimeout(() => {
+      this.activeTags.delete(tagId);
+      this.broadcast('tagExpired', { tagId });
+    }, TAG_EXPIRE_TIME);
+    this.activeTags.set(tagId, { id: tagId, x, y, killerId, victimId, timer });
+    this.broadcast('tagDropped', { tagId, x, y, killerId, victimId });
   }
 
   messages = {
@@ -152,7 +191,9 @@ export class MyRoom extends Room {
       this.lastAttackTime.set(client.sessionId, now);
       this.lastHitTime.set(targetId, now);
 
-      target.hp -= ATTACK_DAMAGE;
+      const meleeDmg = getClassStats(attacker.spriteKey).attackDamage;
+      target.hp -= meleeDmg;
+      this.broadcast('damageDealt', { x: target.x, y: target.y, damage: meleeDmg, type: 'melee' });
       if (target.hp <= 0) {
         target.hp = 0;
         target.alive = false;
@@ -160,8 +201,15 @@ export class MyRoom extends Room {
         attacker.kills += 1;
         attacker.hp = attacker.maxHp;
 
-        // Notify all clients who killed whom so they can follow the killer camera
-        this.broadcast('killed', { victimId: targetId, killerId: client.sessionId });
+        // Notify all clients who killed whom so they can follow the killer camera + kill feed
+        this.broadcast('killed', {
+          victimId: targetId, killerId: client.sessionId,
+          victimName: target.name, killerName: attacker.name, weapon: 'melee',
+        });
+
+        if (this.gameMode === 'killConfirmed') {
+          this.dropTag(target.x, target.y, client.sessionId, targetId);
+        }
 
         this.clock.setTimeout(() => {
           const spawn = gameSpawnPoint();
@@ -221,13 +269,22 @@ export class MyRoom extends Room {
       if (Math.sqrt(dx * dx + dy * dy) > FIREBALL_RANGE) return;
 
       target.hp -= FIREBALL_DAMAGE;
+      this.broadcast('damageDealt', { x: target.x, y: target.y, damage: FIREBALL_DAMAGE, type: 'fireball' });
       if (target.hp <= 0) {
         target.hp = 0;
         target.alive = false;
         target.deaths += 1;
         attacker.kills += 1;
         attacker.hp = attacker.maxHp;
-        this.broadcast('killed', { victimId: message.targetId, killerId: client.sessionId });
+        this.broadcast('killed', {
+          victimId: message.targetId, killerId: client.sessionId,
+          victimName: target.name, killerName: attacker.name, weapon: 'fireball',
+        });
+
+        if (this.gameMode === 'killConfirmed') {
+          this.dropTag(target.x, target.y, client.sessionId, message.targetId);
+        }
+
         this.clock.setTimeout(() => {
           const spawn = gameSpawnPoint();
           target.x = spawn.x; target.y = spawn.y;
@@ -263,6 +320,36 @@ export class MyRoom extends Room {
       this.broadcast('pickupRespawned', { type, idx, wx, wy });
     },
 
+    collectTag: (client: Client, message: { tagId: number }) => {
+      if (this.state.phase !== 'playing') return;
+      if (this.gameMode !== 'killConfirmed') return;
+      const collector = this.state.players.get(client.sessionId);
+      if (!collector || !collector.alive) return;
+
+      const tagId = Number(message.tagId);
+      const tag = this.activeTags.get(tagId);
+      if (!tag) return;
+
+      // Distance check
+      const dx = collector.x - tag.x;
+      const dy = collector.y - tag.y;
+      if (Math.sqrt(dx * dx + dy * dy) > TAG_COLLECT_RANGE) return;
+
+      // Clear expiry timer and remove tag
+      tag.timer.clear();
+      this.activeTags.delete(tagId);
+
+      // Any player can collect for +1 confirmed kill
+      collector.confirmedKills += 1;
+      this.broadcast('tagCollected', { tagId, collectorId: client.sessionId, collectorName: collector.name });
+
+      // Check score limit
+      if (collector.confirmedKills >= KC_SCORE_LIMIT) {
+        if (this.autoEndTimer) { this.autoEndTimer.clear(); this.autoEndTimer = undefined; }
+        this.triggerEndGame();
+      }
+    },
+
     endGame: (client: Client) => {
       if (client.sessionId !== this.hostId) return;
       if (this.state.phase !== "playing") return;
@@ -284,9 +371,20 @@ export class MyRoom extends Room {
       // Delay tick by 4s to match client countdown so HUD shows 5:00 on reveal
       this.clock.setTimeout(() => {
         this.tickInterval = this.clock.setInterval(() => {
-          if (this.state.timeRemaining > 0) this.state.timeRemaining--;
+          if (this.state.timeRemaining > 0) {
+            this.state.timeRemaining--;
+            if (this.state.timeRemaining % 5 === 0) this.updateMetadata();
+          }
         }, 1000);
       }, 4000);
+      // Reset KC state
+      this.state.players.forEach((player) => {
+        player.confirmedKills = 0;
+      });
+      this.activeTags.forEach(tag => tag.timer.clear());
+      this.activeTags.clear();
+      this.tagCounter = 0;
+
       const spawnPoints = gameStartSpawnPoints(this.state.players.size);
       let spawnIdx = 0;
       this.state.players.forEach((player) => {
@@ -297,6 +395,7 @@ export class MyRoom extends Room {
         player.alive = true;
       });
       console.log(`Room ${this.roomId}: game started with ${this.state.players.size} players`);
+      this.updateMetadata();
     },
   }
 
@@ -307,15 +406,25 @@ export class MyRoom extends Room {
     this.state.gameEndTime = 0;
     this.state.timeRemaining = 0;
 
+    // Clear all active tags
+    this.activeTags.forEach(tag => tag.timer.clear());
+    this.activeTags.clear();
+
     // Persist stats for every player that has a clerkId
     let topKills = -1;
-    this.state.players.forEach((p) => { if (p.kills > topKills) topKills = p.kills; });
+    if (this.gameMode === 'killConfirmed') {
+      this.state.players.forEach((p) => { if (p.confirmedKills > topKills) topKills = p.confirmedKills; });
+    } else {
+      this.state.players.forEach((p) => { if (p.kills > topKills) topKills = p.kills; });
+    }
 
     const saves: Promise<void>[] = [];
     this.state.players.forEach((player, sessionId) => {
       const clerkId = this.playerClerkIds.get(sessionId);
       if (!clerkId) return;
-      const won = player.kills === topKills && topKills >= 0;
+      const won = this.gameMode === 'killConfirmed'
+        ? (player.confirmedKills === topKills && topKills >= 0)
+        : (player.kills === topKills && topKills >= 0);
       saves.push(
         (async () => {
           try {
@@ -365,8 +474,10 @@ export class MyRoom extends Room {
         player.alive = true;
         player.kills = 0;
         player.deaths = 0;
+        player.confirmedKills = 0;
       });
       console.log(`Room ${this.roomId}: reset to waiting room`);
+      this.updateMetadata();
     }, 35000);
   }
 
@@ -380,7 +491,25 @@ export class MyRoom extends Room {
     const validated = VALID_MAX_PLAYERS.includes(requestedMax) ? requestedMax : 10;
     this.maxClients = validated;
     this.state.maxPlayers = validated;
-    console.log(`Room created! ID: ${this.roomId}`, options?.isPrivate ? "(private)" : "(public)", `maxPlayers=${validated}`);
+
+    // Game mode
+    this.gameMode = options?.gameMode === 'killConfirmed' ? 'killConfirmed' : 'ffa';
+    this.state.gameMode = this.gameMode;
+    if (this.gameMode === 'killConfirmed') {
+      this.state.scoreLimit = KC_SCORE_LIMIT;
+    }
+
+    await this.setMetadata({
+      gameMode: this.gameMode,
+      roomCode: this.roomId,
+      maxPlayers: validated,
+      isPrivate: options?.isPrivate === true,
+      phase: 'waiting',
+      playerCount: 0,
+      timeRemaining: 0,
+    });
+
+    console.log(`Room created! ID: ${this.roomId}`, options?.isPrivate ? "(private)" : "(public)", `maxPlayers=${validated}`, `gameMode=${this.gameMode}`);
   }
 
   onJoin (client: Client, options: any) {
@@ -404,22 +533,26 @@ export class MyRoom extends Room {
     const color = PLAYER_COLORS[this.playerIndex % PLAYER_COLORS.length];
     this.playerIndex++;
 
+    const spriteKey = (typeof options?.spriteKey === "string" && options.spriteKey.trim())
+      ? options.spriteKey.trim()
+      : "adventurer";
+    const stats = getClassStats(spriteKey);
+
     const player = new PlayerState();
     player.x = spawn.x;
     player.y = spawn.y;
     player.color = color;
-    player.hp = 100;
-    player.maxHp = 100;
+    player.hp = stats.maxHp;
+    player.maxHp = stats.maxHp;
     player.alive = true;
     player.name = (typeof options?.name === "string" && options.name.trim())
       ? options.name.trim().slice(0, 16)
       : `Player${this.playerIndex}`;
-    player.spriteKey = (typeof options?.spriteKey === "string" && options.spriteKey.trim())
-      ? options.spriteKey.trim()
-      : "archer";
+    player.spriteKey = spriteKey;
 
     this.state.players.set(client.sessionId, player);
     console.log(client.sessionId, `joined as "${player.name}"! Players:`, this.state.players.size);
+    this.updateMetadata();
   }
 
   async onDrop (client: Client, code: CloseCode) {
@@ -453,6 +586,7 @@ export class MyRoom extends Room {
     if (wasHost) this.transferHost();
     console.log(client.sessionId, "left! Players:", this.state.players.size);
     if (this.state.players.size === 0) this.scheduleEmptyDispose();
+    this.updateMetadata();
   }
 
   onDispose() {

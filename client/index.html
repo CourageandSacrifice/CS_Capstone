@@ -75,6 +75,11 @@
           <div id="host-options" class="sub-options">
             <button class="sub-btn active" id="public-btn">PUBLIC</button>
             <button class="sub-btn" id="private-btn">PRIVATE</button>
+            <span class="sub-label">MODE:</span>
+            <div class="game-mode-selector">
+              <button class="game-mode-btn active" id="ffa-btn">FREEPLAY</button>
+              <button class="game-mode-btn" id="kc-btn">KILL CONFIRMED</button>
+            </div>
             <span class="max-players-label">MAX:</span>
             <div class="player-count-selector">
               <button class="player-count-btn" id="mp-5">5</button>
@@ -88,9 +93,11 @@
           <div id="join-options" class="sub-options hidden">
             <button class="sub-btn active" id="random-btn">RANDOM</button>
             <button class="sub-btn" id="code-btn">CODE</button>
+            <button class="sub-btn" id="browse-btn">BROWSE</button>
             <input id="room-code-input" type="text" maxlength="12"
                    placeholder="ROOM CODE" autocomplete="off" spellcheck="false"
                    autocapitalize="characters" class="hidden" />
+            <div id="room-browser" class="room-browser hidden"></div>
           </div>
 
           <button class="play-btn" id="play-btn">&#9658;&nbsp;PLAY</button>

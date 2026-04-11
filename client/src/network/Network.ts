@@ -47,9 +47,9 @@ export async function autoJoin(name: string, spriteKey = 'adventurer'): Promise<
   return setupRoom(r);
 }
 
-export async function createRoom(name: string, isPrivate = false, spriteKey = 'adventurer', maxPlayers = 10, clerkId = ''): Promise<Room> {
+export async function createRoom(name: string, isPrivate = false, spriteKey = 'adventurer', maxPlayers = 10, clerkId = '', gameMode = 'ffa'): Promise<Room> {
   const c = initClient();
-  const r = await c.create('my_room', { name, isPrivate, spriteKey, maxPlayers, clerkId });
+  const r = await c.create('my_room', { name, isPrivate, spriteKey, maxPlayers, clerkId, gameMode });
   return setupRoom(r);
 }
 
@@ -134,6 +134,23 @@ export function sendEndGame(): void {
 export function sendStartGame(): void {
   if (!room) return;
   room.send('startGame');
+}
+
+export async function getAvailableRooms(): Promise<any[]> {
+  const c = initClient();
+  const res = await c.http.get('/matchmake/my_room');
+  return res.data as any[];
+}
+
+export async function joinRoomById(roomId: string, name: string, spriteKey = 'adventurer', clerkId = ''): Promise<Room> {
+  const c = initClient();
+  const r = await c.joinById(roomId, { name, spriteKey, clerkId });
+  return setupRoom(r);
+}
+
+export function sendTagCollect(tagId: number): void {
+  if (!room) return;
+  room.send('collectTag', { tagId });
 }
 
 export function leaveRoom(): void {

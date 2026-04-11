@@ -19,7 +19,7 @@ const server = defineServer({
      * Define your room handlers:
      */
     rooms: {
-        my_room: defineRoom(MyRoom, { filterBy: ['isPrivate'] })
+        my_room: defineRoom(MyRoom, { filterBy: ['isPrivate', 'gameMode'] })
     },
 
     /**

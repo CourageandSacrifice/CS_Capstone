@@ -49,6 +49,11 @@ export class HUDScene extends Phaser.Scene {
   private minimapX = 0;
   private minimapDots!: Phaser.GameObjects.Graphics;
 
+  private gameMode: string = 'ffa';
+  private confirmedLabel?: Phaser.GameObjects.Text;
+  private confirmedText?: Phaser.GameObjects.Text;
+  private tagIcon?: Phaser.GameObjects.Image;
+
   constructor() {
     super('HUDScene');
   }
@@ -217,12 +222,18 @@ export class HUDScene extends Phaser.Scene {
     this.gameScene.events.on('playerKillsChanged', (kills: number) => {
       this.killText.setText(`${kills}`);
     });
-    this.gameScene.events.on('gameOver', (scores: { name: string; kills: number; deaths: number }[], timeLimitReached: boolean) => {
+    this.gameScene.events.on('gameOver', (scores: { name: string; kills: number; deaths: number; confirmedKills: number }[], timeLimitReached: boolean) => {
       this.showGameOverScreen(scores, timeLimitReached);
     });
     this.gameScene.events.on('timeRemainingUpdated', (secs: number) => {
       this.timeRemaining = secs;
       this.updateTimerDisplay();
+    });
+    this.gameScene.events.on('gameModeSet', (mode: string) => {
+      this.gameMode = mode;
+    });
+    this.gameScene.events.on('confirmedKillChanged', (confirmed: number) => {
+      if (this.confirmedText) this.confirmedText.setText(`${confirmed}`);
     });
     this.gameScene.events.on('gameStarted', () => {
       this.switchToGameHUD();
@@ -488,6 +499,9 @@ export class HUDScene extends Phaser.Scene {
     this.mmContainer.setVisible(false);
     if (this.endGameBtn) { this.endGameBtn.destroy(); this.endGameBtn = undefined; }
     if (this.timerText) { this.timerText.destroy(); this.timerText = undefined; }
+    if (this.confirmedLabel) { this.confirmedLabel.destroy(); this.confirmedLabel = undefined; }
+    if (this.confirmedText) { this.confirmedText.destroy(); this.confirmedText = undefined; }
+    if (this.tagIcon) { this.tagIcon.destroy(); this.tagIcon = undefined; }
     this.timeRemaining = 0;
 
     // Show waiting room UI
@@ -552,6 +566,24 @@ export class HUDScene extends Phaser.Scene {
     this.killLabel.setVisible(true);
     this.killText.setVisible(true);
     this.mmContainer.setVisible(true);
+
+    if (this.gameMode === 'killConfirmed') {
+      this.tagIcon = this.add.image(18, 74, 'kill-tag').setOrigin(0, 0).setDisplaySize(18, 18).setDepth(10);
+      this.confirmedLabel = this.add.text(40, 73, 'CONFIRMED', {
+        fontFamily: 'Courier New, monospace',
+        fontSize: '9px',
+        color: '#888888',
+        letterSpacing: 2,
+      }).setDepth(10);
+      this.confirmedText = this.add.text(18, 94, '0', {
+        fontFamily: 'Courier New, monospace',
+        fontSize: '28px',
+        color: '#ffd700',
+        fontStyle: 'bold',
+        stroke: '#000000',
+        strokeThickness: 5,
+      }).setDepth(10);
+    }
 
     // Timer — to the left of the minimap
     this.timerText = this.add.text(
@@ -659,7 +691,7 @@ export class HUDScene extends Phaser.Scene {
     return container;
   }
 
-  private showGameOverScreen(scores: { name: string; kills: number; deaths: number }[], timeLimitReached = false): void {
+  private showGameOverScreen(scores: { name: string; kills: number; deaths: number; confirmedKills: number }[], timeLimitReached = false): void {
     const { width, height } = this.scale;
     const cx = width / 2; const cy = height / 2;
 
@@ -701,11 +733,14 @@ export class HUDScene extends Phaser.Scene {
       stroke: '#000000', strokeThickness: 3,
     }).setOrigin(0.5).setDepth(201));
 
+    const isKC = this.gameMode === 'killConfirmed';
     scores.forEach((entry, i) => {
       const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
       const kd = (entry.kills / Math.max(entry.deaths, 1)).toFixed(2);
-      extraObjects.push(this.add.text(cx, cy - 22 + i * 34,
-        `${medal}  ${entry.name}  —  ${entry.kills}K / ${entry.deaths}D  (${kd} K/D)`, {
+      const scoreStr = isKC
+        ? `${medal}  ${entry.name}  —  ${entry.confirmedKills} Confirmed  (${entry.kills}K / ${entry.deaths}D)`
+        : `${medal}  ${entry.name}  —  ${entry.kills}K / ${entry.deaths}D  (${kd} K/D)`;
+      extraObjects.push(this.add.text(cx, cy - 22 + i * 34, scoreStr, {
           fontFamily: 'Courier New, monospace', fontSize: '18px',
           color: i === 0 ? '#f4d03f' : '#ffffff',
           fontStyle: i === 0 ? 'bold' : 'normal',
