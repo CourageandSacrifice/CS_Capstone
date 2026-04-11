@@ -46,6 +46,7 @@ export interface LobbyResult {
   isPrivate: boolean;
   roomCode: string;
   classData: ClassData;
+  gameMode: string;
 }
 
 export function initLobby(): Promise<LobbyResult> {
@@ -126,10 +127,26 @@ function drawCenterStage(canvas: HTMLCanvasElement, char: ClassData): void {
   img.src = `/characters/${char.defaultTexture}.png`;
 }
 
-function getCategory(char: ClassData): string {
-  if (char.maxHp >= 150) return 'Guard';
-  if (char.maxHp >= 120) return 'Warrior';
-  return 'Citizen';
+function buildStatRow(label: string, filled: number, value: string): HTMLDivElement {
+  const row = document.createElement('div');
+  row.className = 'stat-row';
+  const lbl = document.createElement('span');
+  lbl.className = 'stat-label';
+  lbl.textContent = label;
+  row.appendChild(lbl);
+  const dots = document.createElement('span');
+  dots.className = 'stat-dots';
+  for (let i = 0; i < 5; i++) {
+    const dot = document.createElement('span');
+    dot.className = i < filled ? 'stat-dot filled' : 'stat-dot';
+    dots.appendChild(dot);
+  }
+  row.appendChild(dots);
+  const val = document.createElement('span');
+  val.className = 'stat-value';
+  val.textContent = value;
+  row.appendChild(val);
+  return row;
 }
 
 function buildLockerGrid(
@@ -137,6 +154,11 @@ function buildLockerGrid(
   selectedKey: string,
   onSelect: (char: ClassData) => void,
 ): void {
+  // Clean up any running animation intervals from previous grid
+  container.querySelectorAll('canvas').forEach(c => {
+    const id = (c as any)._animInterval;
+    if (id) clearInterval(id);
+  });
   container.innerHTML = '';
   const grid = document.createElement('div');
   grid.className = 'locker-grid';
@@ -148,8 +170,8 @@ function buildLockerGrid(
     card.dataset.key = char.spriteKey;
 
     const canvas = document.createElement('canvas');
-    canvas.width = 192;
-    canvas.height = 192;
+    canvas.width = 320;
+    canvas.height = 320;
 
     const img = new Image();
     img.onload = () => {
@@ -157,11 +179,21 @@ function buildLockerGrid(
       ctx.imageSmoothingEnabled = false;
       const fw = char.frameWidth;
       const fh = char.frameHeight;
+      const totalFrames = Math.floor(img.naturalWidth / fw);
       const aspect = fh / fw;
       const destW = canvas.width;
       const destH = Math.min(canvas.height, Math.round(destW * aspect));
       const destY = Math.round((canvas.height - destH) / 2);
-      ctx.drawImage(img, 0, 0, fw, fh, 0, destY, destW, destH);
+      let frame = 0;
+      const drawFrame = () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, frame * fw, 0, fw, fh, 0, destY, destW, destH);
+        frame = (frame + 1) % totalFrames;
+      };
+      drawFrame();
+      const intervalId = setInterval(drawFrame, 180);
+      // Store interval so we can clean up if grid is rebuilt
+      (canvas as any)._animInterval = intervalId;
     };
     img.src = `/characters/${char.defaultTexture}.png`;
 
@@ -169,11 +201,13 @@ function buildLockerGrid(
     nameEl.className = 'char-card-name';
     nameEl.textContent = char.name;
 
-    const catEl = document.createElement('div');
-    catEl.className = 'char-card-cat';
-    catEl.textContent = getCategory(char);
+    const statsEl = document.createElement('div');
+    statsEl.className = 'char-card-stats';
+    statsEl.appendChild(buildStatRow('Speed', char.stars.speed, `${char.speed}`));
+    statsEl.appendChild(buildStatRow('Health', char.stars.health, `${char.maxHp}`));
+    statsEl.appendChild(buildStatRow('Damage', char.stars.damage, `${char.attackDamage}`));
 
-    card.append(canvas, nameEl, catEl);
+    card.append(canvas, nameEl, statsEl);
 
     card.addEventListener('click', () => {
       playMenuClick();
@@ -298,6 +332,7 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void, clerkId:
   let isPrivate = false;
   let roomCode = '';
   let maxPlayers = 10;
+  let gameMode = 'ffa';
 
   // Mode buttons
   const hostBtn = document.getElementById('host-btn')!;
@@ -369,6 +404,24 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void, clerkId:
     });
   });
 
+  // ── Host: game mode selector ──
+  const ffaBtn = document.getElementById('ffa-btn');
+  const kcBtn = document.getElementById('kc-btn');
+  if (ffaBtn && kcBtn) {
+    ffaBtn.addEventListener('click', () => {
+      playMenuClick();
+      gameMode = 'ffa';
+      ffaBtn.classList.add('active');
+      kcBtn.classList.remove('active');
+    });
+    kcBtn.addEventListener('click', () => {
+      playMenuClick();
+      gameMode = 'killConfirmed';
+      kcBtn.classList.add('active');
+      ffaBtn.classList.remove('active');
+    });
+  }
+
   // ── Join status feedback ──
   const joinStatus = document.createElement('span');
   joinStatus.style.cssText = 'font-size:12px;font-weight:bold;letter-spacing:1px;min-width:130px;text-align:left;';
@@ -383,6 +436,11 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void, clerkId:
     roomCodeInput.classList.add('hidden');
     roomCodeInput.value = '';
     joinStatus.textContent = '';
+    const roomBrowser = document.getElementById('room-browser');
+    if (roomBrowser) roomBrowser.classList.add('hidden');
+    const browseBtn = document.getElementById('browse-btn');
+    if (browseBtn) browseBtn.classList.remove('active');
+    if (browserInterval) { clearInterval(browserInterval); browserInterval = undefined; }
   });
 
   codeBtn.addEventListener('click', () => {
@@ -391,6 +449,9 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void, clerkId:
     codeBtn.classList.add('active');
     roomCodeInput.classList.remove('hidden');
     roomCodeInput.focus();
+    const roomBrowser = document.getElementById('room-browser');
+    if (roomBrowser) roomBrowser.classList.add('hidden');
+    if (browserInterval) { clearInterval(browserInterval); browserInterval = undefined; }
   });
 
   roomCodeInput.addEventListener('input', () => {
@@ -398,6 +459,79 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void, clerkId:
     roomCode = roomCodeInput.value.trim();
     joinStatus.textContent = '';
   });
+
+  // ── Browse rooms ──
+  const browseBtn = document.getElementById('browse-btn');
+  const roomBrowser = document.getElementById('room-browser');
+  let browserInterval: number | undefined;
+
+  async function refreshRoomBrowser() {
+    const container = document.getElementById('room-browser');
+    if (!container) return;
+    try {
+      const { getAvailableRooms } = await import('./network/Network');
+      const rooms = await getAvailableRooms();
+      const publicRooms = rooms.filter((r: any) => !r.metadata?.isPrivate);
+
+      container.innerHTML = '';
+      if (publicRooms.length === 0) {
+        container.innerHTML = '<div class="no-rooms">No open rooms found</div>';
+        return;
+      }
+
+      for (const rm of publicRooms) {
+        const meta = rm.metadata || {};
+        const modeLabel = meta.gameMode === 'killConfirmed' ? 'KILL CONFIRMED' : 'FREEPLAY';
+        const code = meta.roomCode || rm.roomId;
+        const players = `${rm.clients}/${rm.maxClients}`;
+        const phase = meta.phase || 'waiting';
+        const isPlaying = phase === 'playing';
+        const statusLabel = isPlaying ? 'IN GAME' : 'OPEN';
+        const statusClass = isPlaying ? 'in-game' : 'open';
+
+        let timeDisplay = '';
+        if (isPlaying && meta.timeRemaining != null) {
+          const mins = Math.floor(meta.timeRemaining / 60);
+          const secs = meta.timeRemaining % 60;
+          timeDisplay = `${mins}:${String(secs).padStart(2, '0')}`;
+        }
+
+        const card = document.createElement('div');
+        card.className = 'room-card';
+        card.innerHTML = `
+          <span class="room-mode">${modeLabel}</span>
+          <span class="room-code">${code}</span>
+          <span class="room-players">${players}</span>
+          ${timeDisplay ? `<span class="room-time">${timeDisplay}</span>` : ''}
+          <span class="room-status ${statusClass}">${statusLabel}</span>
+        `;
+        card.addEventListener('click', () => {
+          (window as any).__browserRoomId = rm.roomId;
+          (window as any).__browserRoomCode = code;
+          container.querySelectorAll('.room-card').forEach(c => c.classList.remove('selected'));
+          card.classList.add('selected');
+        });
+        container.appendChild(card);
+      }
+    } catch (_err) {
+      container.innerHTML = '<div class="no-rooms">Failed to load rooms</div>';
+    }
+  }
+
+  if (browseBtn && roomBrowser) {
+    browseBtn.addEventListener('click', () => {
+      playMenuClick();
+      roomCodeInput.classList.add('hidden');
+      roomBrowser.classList.remove('hidden');
+
+      document.querySelectorAll('#join-options .sub-btn').forEach(b => b.classList.remove('active'));
+      browseBtn.classList.add('active');
+
+      refreshRoomBrowser();
+      if (browserInterval) clearInterval(browserInterval);
+      browserInterval = window.setInterval(refreshRoomBrowser, 5000);
+    });
+  }
 
   // ── Play ──
   playBtn.addEventListener('click', async () => {
@@ -415,6 +549,7 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void, clerkId:
     playBtn.style.color = '';
 
     const launchGame = async () => {
+      if (browserInterval) { clearInterval(browserInterval); browserInterval = undefined; }
       playBtn.textContent = 'Game Found';
       playBtn.style.color = '#2ecc71';
       await delay(1000);
@@ -430,9 +565,9 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void, clerkId:
 
     if (mode === 'host') {
       try {
-        await createRoom(username, isPrivate, classData.spriteKey, maxPlayers, clerkId);
+        await createRoom(username, isPrivate, classData.spriteKey, maxPlayers, clerkId, gameMode);
         await launchGame();
-        resolve({ username, clerkId, mode, isPrivate, roomCode, classData });
+        resolve({ username, clerkId, mode, isPrivate, roomCode, classData, gameMode });
       } catch (err) {
         console.error('[Campus Clash] createRoom failed:', err);
         playBtn.textContent = 'Connection Failed';
@@ -446,10 +581,35 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void, clerkId:
       try {
         await joinAnyRoom(username, classData.spriteKey, clerkId);
         await launchGame();
-        resolve({ username, clerkId, mode, isPrivate, roomCode, classData });
+        resolve({ username, clerkId, mode, isPrivate, roomCode, classData, gameMode });
       } catch (err) {
         console.error('[Campus Clash] joinAnyRoom failed:', err);
         joinStatus.textContent = 'No Rooms Available';
+        joinStatus.style.color = '#e63946';
+        setTimeout(() => { joinStatus.textContent = ''; }, 3000);
+        resetBtn();
+      }
+      return;
+    }
+
+    // Join via room browser
+    if ((window as any).__browserRoomId && browseBtn?.classList.contains('active')) {
+      try {
+        const { joinRoomById } = await import('./network/Network');
+        await joinRoomById(
+          (window as any).__browserRoomId,
+          username,
+          classData.spriteKey,
+          clerkId,
+        );
+        if (browserInterval) { clearInterval(browserInterval); browserInterval = undefined; }
+        (window as any).__browserRoomId = undefined;
+        (window as any).__browserRoomCode = undefined;
+        await launchGame();
+        resolve({ username, clerkId, mode, isPrivate, roomCode, classData, gameMode });
+      } catch (err) {
+        console.error('[Campus Clash] joinRoomById failed:', err);
+        joinStatus.textContent = 'Failed to Join';
         joinStatus.style.color = '#e63946';
         setTimeout(() => { joinStatus.textContent = ''; }, 3000);
         resetBtn();
@@ -465,7 +625,7 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void, clerkId:
       joinStatus.textContent = 'Game Found';
       joinStatus.style.color = '#2ecc71';
       await launchGame();
-      resolve({ username, clerkId, mode, isPrivate, roomCode, classData });
+      resolve({ username, clerkId, mode, isPrivate, roomCode, classData, gameMode });
     } catch (err) {
       console.error('[Campus Clash] joinRoom failed:', err);
       joinStatus.textContent = 'Lobby Not Found';

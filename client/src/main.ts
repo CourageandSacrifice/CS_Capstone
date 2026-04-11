@@ -6,7 +6,7 @@ import './style.css';
 
 console.log('[CC] main.ts loaded — Clerk key present:', !!import.meta.env.VITE_CLERK_PUBLISHABLE_KEY);
 
-initLobby().catch((err) => console.error('[CC] initLobby failed:', err)).then(({ username, clerkId, mode, isPrivate, roomCode, classData }: any) => {
+initLobby().catch((err) => console.error('[CC] initLobby failed:', err)).then(({ username, clerkId, mode, isPrivate, roomCode, classData, gameMode }: any) => {
   const config: Phaser.Types.Core.GameConfig = {
     type: Phaser.AUTO,
     title: 'Campus Clash',
@@ -29,4 +29,5 @@ initLobby().catch((err) => console.error('[CC] initLobby failed:', err)).then(({
   game.registry.set('isPrivate', isPrivate);
   game.registry.set('roomCode', roomCode);
   game.registry.set('classData', classData);
+  game.registry.set('gameMode', gameMode || 'ffa');
 });

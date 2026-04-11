@@ -10,6 +10,7 @@ export class PlayerState extends Schema {
   @type("boolean") alive: boolean = true;
   @type("number") kills: number = 0;
   @type("number") deaths: number = 0;
+  @type("number") confirmedKills: number = 0;
   @type("string") spriteKey: string = "archer";
 }
 
@@ -24,4 +25,6 @@ export class MyRoomState extends Schema {
   @type("number") timeRemaining: number = 0;
   @type("boolean") timeLimitReached: boolean = false;
   @type("number") pickupSeed: number = 0;
+  @type("string") gameMode: string = "ffa";
+  @type("number") scoreLimit: number = 0;
 }

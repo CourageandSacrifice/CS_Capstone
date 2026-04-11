@@ -338,6 +338,72 @@ html, body {
 #room-code-input:focus { border-color: #c41230; }
 #room-code-input::placeholder { color: rgba(255,255,255,0.18); letter-spacing: 1px; }
 
+/* Sub label */
+.sub-label {
+  font-size: 8px; letter-spacing: 1.5px; color: #666676; white-space: nowrap;
+}
+
+/* Game mode selector */
+.game-mode-selector {
+  display: flex;
+  gap: 0;
+  border: 2px solid #2a2a2a;
+  width: 100%;
+}
+.game-mode-btn {
+  flex: 1;
+  padding: 7px 10px;
+  background: #0d0d0d;
+  border: none;
+  border-right: 1px solid #2a2a2a;
+  color: #666676;
+  font-family: inherit;
+  font-size: 8px;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+  text-transform: uppercase;
+}
+.game-mode-btn:last-child { border-right: none; }
+.game-mode-btn.active { background: #150505; color: #c41230; }
+.game-mode-btn:hover:not(.active) { background: #111; color: #888; }
+
+/* Room browser */
+.room-browser {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+  margin-top: 8px;
+  width: 100%;
+}
+.room-browser.hidden { display: none; }
+.room-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #0d0d0d;
+  border: 2px solid #2a2a2a;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  font-size: 8px;
+  letter-spacing: 1px;
+  color: #aaa;
+}
+.room-card:hover { border-color: #c41230; background: #150505; }
+.room-card.selected { border-color: #c41230; background: #1a0808; }
+.room-mode { color: #f5c518; min-width: 80px; font-weight: bold; }
+.room-code { color: #2ecc71; font-size: 9px; letter-spacing: 2px; }
+.room-players { color: #a8dadc; }
+.room-time { color: #888; font-size: 7px; }
+.room-status { font-size: 7px; padding: 2px 6px; border: 1px solid; text-transform: uppercase; }
+.room-status.open { color: #2ecc71; border-color: #2ecc71; }
+.room-status.in-game { color: #e67e22; border-color: #e67e22; }
+.no-rooms { color: #666; font-size: 8px; text-align: center; padding: 20px; letter-spacing: 1px; }
+
 /* Max Players */
 .max-players-label {
   font-size: 8px; letter-spacing: 1.5px; color: #666676; white-space: nowrap;
@@ -548,13 +614,13 @@ html, body {
 .locker-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  max-width: 900px; gap: 12px;
+  max-width: 1200px; gap: 16px;
 }
 
 .char-card {
   background: #0d0d0d; border: 2px solid #2a2a2a;
-  padding: 16px 12px; cursor: pointer;
-  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 20px 16px; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
   transition: border-color 0.1s;
 }
 .char-card:hover { border-color: #666676; box-shadow: 3px 3px 0 #000; }
@@ -566,9 +632,33 @@ html, body {
 .char-card canvas { image-rendering: pixelated; image-rendering: crisp-edges; }
 
 .char-card-name {
-  font-size: 9px; letter-spacing: 1px; color: #888898; text-align: center;
+  font-size: 11px; letter-spacing: 2px; color: #ccccd8; text-align: center;
+  font-weight: bold; text-transform: uppercase;
 }
-.char-card-cat {
-  font-size: 7px; letter-spacing: 1px; color: #555565;
-  text-align: center; text-transform: uppercase;
+
+.char-card-stats {
+  display: flex; flex-direction: column; gap: 4px;
+  width: 100%; padding: 6px 8px 0;
+}
+.stat-row {
+  display: flex; justify-content: space-between; align-items: center;
+}
+.stat-label {
+  font-size: 9px; letter-spacing: 1px; color: #888898; text-transform: uppercase;
+  min-width: 56px;
+}
+.stat-dots {
+  display: flex; gap: 4px;
+}
+.stat-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: #222230; border: 1px solid #333345;
+}
+.stat-dot.filled {
+  background: #c41230; border-color: #e8143a;
+  box-shadow: 0 0 4px #c4123066;
+}
+.stat-value {
+  font-size: 10px; color: #aaaab8; min-width: 28px;
+  text-align: right; font-weight: bold;
 }

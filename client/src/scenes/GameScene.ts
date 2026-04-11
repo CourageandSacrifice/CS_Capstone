@@ -12,7 +12,7 @@ import {
 import { ClassData, DEFAULT_CLASS, CHARACTERS } from '../data/Classes';
 import { Player } from '../entities/Player';
 import { RemotePlayer } from '../entities/RemotePlayer';
-import { sendPosition, sendAttack, sendSwing, sendEndGame, sendFireball, sendFireballLaunched, sendPickupCollect, sendPickupRespawnPos } from '../network/Network';
+import { sendPosition, sendAttack, sendSwing, sendEndGame, sendFireball, sendFireballLaunched, sendPickupCollect, sendPickupRespawnPos, sendTagCollect } from '../network/Network';
 import { Room, getStateCallbacks } from '@colyseus/sdk';
 
 interface ActiveProjectile {
@@ -52,7 +52,9 @@ export class GameScene extends Phaser.Scene {
   private static readonly SEND_INTERVAL = 50; // ~20fps
 
   private eliminatedText?: Phaser.GameObjects.Text;
+  private eliminatedSubtext?: Phaser.GameObjects.Text;
   private eliminatedOverlay?: Phaser.GameObjects.Graphics;
+  private killFeedEntries: Phaser.GameObjects.Text[] = [];
   private mapLayer?: Phaser.GameObjects.Graphics;
   private campusMapGraphics?: Phaser.GameObjects.Graphics | Phaser.GameObjects.Image;
   private buildingImages: Phaser.GameObjects.Image[] = [];
@@ -62,14 +64,17 @@ export class GameScene extends Phaser.Scene {
   private fireballCount = 0;
   private readonly MAX_FIREBALLS = 3;
   private readonly FIREBALL_SPEED = 495;
-  private readonly FIREBALL_RANGE_PX = 240;
-  private readonly FIREBALL_FLICKER_PX = 208;
+  private FIREBALL_RANGE_PX = 240;
+  private FIREBALL_FLICKER_PX = 208;
   private activeProjectiles: ActiveProjectile[] = [];
   private remoteProjectiles: ActiveProjectile[] = [];
   private pickupItems: PickupItem[] = [];
   private healthPickups: PickupItem[] = [];
   private validPickupTiles: { wx: number; wy: number }[] = [];
   private pickupRng: (() => number) | null = null;
+  private activeTags = new Map<number, Phaser.GameObjects.Image>();
+  private gameMode: string = 'ffa';
+  private pendingTagCollects = new Set<number>();
 
   constructor() {
     super('GameScene');
@@ -97,6 +102,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.load.image('campus-map', '/campus-map.png');
+    this.load.image('kill-tag', '/kill-tag.png');
     this.load.spritesheet('fireball', '/fireball-sheet.png', { frameWidth: 64, frameHeight: 32 });
     this.load.image('fireball-pickup', '/fireball-pickup.png');
     this.load.image('health-pickup', '/health-pickup.png');
@@ -111,6 +117,8 @@ export class GameScene extends Phaser.Scene {
 
   init(data?: { classData?: ClassData }): void {
     this.classData = data?.classData ?? this.registry.get('classData') ?? DEFAULT_CLASS;
+    this.FIREBALL_RANGE_PX = this.classData.fireballRange * 16; // tiles → px
+    this.FIREBALL_FLICKER_PX = this.FIREBALL_RANGE_PX - 32;
   }
 
   create(): void {
@@ -250,11 +258,16 @@ export class GameScene extends Phaser.Scene {
     const seed = (this.room?.state as any)?.pickupSeed ?? (Date.now() & 0xFFFFFF);
     this.pickupRng = GameScene.makeSeededRng(seed);
     this.spawnPickupItems();
+    this.events.emit('gameModeSet', this.gameMode);
     this.events.emit('gameStarted');
   }
 
   private setupMultiplayer(room: Room, state: any): void {
     const $ = getStateCallbacks(room) as any;
+
+    // Read game mode from state
+    this.gameMode = (state as any).gameMode || 'ffa';
+    this.events.emit('gameModeSet', this.gameMode);
 
     // Move local player to server-assigned spawn position and show name
     const myState = state.players.get(room.sessionId);
@@ -299,7 +312,7 @@ export class GameScene extends Phaser.Scene {
           this.player.alive = playerState.alive;
           if (!playerState.alive) {
             this.player.playDeath();
-            this.showEliminatedOverlay();
+            // showEliminatedOverlay is called from 'killed' handler with killer name
             this.sound.play('sfx_dead', { volume: 0.8 });
           } else {
             this.player.playRespawn();
@@ -310,6 +323,10 @@ export class GameScene extends Phaser.Scene {
             // Re-attach camera to local player after respawn (may have been following killer)
             this.cameras.main.startFollow(this.player.sprite, true, 0.1, 0.1);
           }
+        });
+
+        $(playerState).listen("confirmedKills", (value: number) => {
+          this.events.emit('confirmedKillChanged', value);
         });
         return;
       }
@@ -384,11 +401,15 @@ export class GameScene extends Phaser.Scene {
 
     $(state).listen('gameOver', () => {
       if (!state.gameOver) return;
-      const scores: { name: string; kills: number; deaths: number }[] = [];
+      const scores: { name: string; kills: number; deaths: number; confirmedKills: number }[] = [];
       state.players.forEach((p: any) => {
-        scores.push({ name: p.name, kills: p.kills, deaths: p.deaths });
+        scores.push({ name: p.name, kills: p.kills, deaths: p.deaths, confirmedKills: p.confirmedKills ?? 0 });
       });
       scores.sort((a, b) => {
+        if (this.gameMode === 'killConfirmed') {
+          if (b.confirmedKills !== a.confirmedKills) return b.confirmedKills - a.confirmedKills;
+          return b.kills - a.kills;
+        }
         const kdA = a.kills / Math.max(a.deaths, 1);
         const kdB = b.kills / Math.max(b.deaths, 1);
         if (kdB !== kdA) return kdB - kdA;
@@ -397,7 +418,13 @@ export class GameScene extends Phaser.Scene {
       this.events.emit('gameOver', scores, state.timeLimitReached ?? false);
     });
 
-    room.onMessage('killed', (data: { victimId: string; killerId: string }) => {
+    room.onMessage('killed', (data: {
+      victimId: string; killerId: string;
+      victimName: string; killerName: string; weapon: string;
+    }) => {
+      // Kill feed for everyone
+      this.addKillFeedEntry(data.killerName, data.victimName, data.weapon);
+
       if (data.victimId !== room.sessionId) return;
       // Camera follows the killer so the dead player can spectate briefly
       const killer = this.remotePlayers.get(data.killerId);
@@ -405,6 +432,7 @@ export class GameScene extends Phaser.Scene {
         this.cameras.main.stopFollow();
         this.cameras.main.startFollow(killer.sprite, true, 0.08, 0.08);
       }
+      this.showEliminatedOverlay(data.killerName);
     });
 
     room.onMessage('attackEffect', (data: {
@@ -436,6 +464,11 @@ export class GameScene extends Phaser.Scene {
         sprite, dirX: data.dirX, dirY: data.dirY,
         traveled: 0, flickering: false, flickerTimer: 0,
       });
+    });
+
+    room.onMessage('damageDealt', (data: { x: number; y: number; damage: number; type: string }) => {
+      const color = data.type === 'fireball' ? '#ffd700' : '#ffffff';
+      this.showFloatingDamage(data.x, data.y, data.damage, color);
     });
 
     room.onMessage('pickupCollected', (data: { type: string; idx: number; collectorId: string }) => {
@@ -483,6 +516,60 @@ export class GameScene extends Phaser.Scene {
         repeat: -1,
       });
     });
+
+    // ── Kill Confirmed tag messages ──
+    room.onMessage('tagDropped', (data: { tagId: number; x: number; y: number }) => {
+      const sprite = this.add.image(data.x, data.y, 'kill-tag');
+      sprite.setDisplaySize(24, 24).setDepth(11);
+      this.tweens.add({
+        targets: sprite,
+        y: data.y - 4,
+        duration: 600,
+        ease: 'Sine.easeInOut',
+        yoyo: true,
+        repeat: -1,
+      });
+      this.activeTags.set(data.tagId, sprite);
+    });
+
+    room.onMessage('tagCollected', (data: { tagId: number; collectorId: string; collectorName: string }) => {
+      const sprite = this.activeTags.get(data.tagId);
+      if (sprite) {
+        const text = this.add.text(sprite.x, sprite.y - 10, '+1', {
+          fontFamily: 'monospace',
+          fontSize: '20px',
+          color: '#ffd700',
+          fontStyle: 'bold',
+          stroke: '#000000',
+          strokeThickness: 3,
+        }).setOrigin(0.5).setDepth(10000);
+        this.tweens.add({
+          targets: text,
+          y: sprite.y - 40,
+          alpha: 0,
+          duration: 1200,
+          ease: 'Power2',
+          onComplete: () => text.destroy(),
+        });
+        sprite.destroy();
+        this.activeTags.delete(data.tagId);
+      }
+      this.pendingTagCollects.delete(data.tagId);
+    });
+
+    room.onMessage('tagExpired', (data: { tagId: number }) => {
+      const sprite = this.activeTags.get(data.tagId);
+      if (sprite) {
+        this.tweens.add({
+          targets: sprite,
+          alpha: 0,
+          duration: 500,
+          onComplete: () => sprite.destroy(),
+        });
+        this.activeTags.delete(data.tagId);
+      }
+      this.pendingTagCollects.delete(data.tagId);
+    });
   }
 
   setCountdownActive(v: boolean): void {
@@ -500,6 +587,9 @@ export class GameScene extends Phaser.Scene {
     this.healthPickups = [];
     this.fireballCount = 0;
     this.events.emit('inventoryChanged', 0);
+    this.activeTags.forEach(sprite => sprite.destroy());
+    this.activeTags.clear();
+    this.pendingTagCollects.clear();
 
     this.gamePhase = 'waiting';
     this.countdownActive = false;
@@ -548,28 +638,33 @@ export class GameScene extends Phaser.Scene {
     sendEndGame();
   }
 
-  private showEliminatedOverlay(): void {
+  private showEliminatedOverlay(killerName?: string): void {
     if (this.eliminatedText) return;
-    const { width, height } = this.cameras.main;
+    const { width, height, centerX, centerY } = this.cameras.main;
 
     this.eliminatedOverlay = this.add.graphics();
     this.eliminatedOverlay.fillStyle(0x000000, 0.30);
     this.eliminatedOverlay.fillRect(0, 0, width, height);
-    this.eliminatedOverlay.setScrollFactor(0).setDepth(99);
+    this.eliminatedOverlay.setScrollFactor(0).setDepth(20000);
 
-    this.eliminatedText = this.add.text(
-      this.cameras.main.centerX,
-      this.cameras.main.centerY,
-      'ELIMINATED',
-      {
+    this.eliminatedText = this.add.text(centerX, centerY - 20, 'ELIMINATED', {
+      fontFamily: 'Courier New, monospace',
+      fontSize: '48px',
+      color: '#ff0000',
+      stroke: '#000000',
+      strokeThickness: 6,
+      fontStyle: 'bold',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(20001);
+
+    if (killerName) {
+      this.eliminatedSubtext = this.add.text(centerX, centerY + 30, `Killed by ${killerName}`, {
         fontFamily: 'Courier New, monospace',
-        fontSize: '48px',
-        color: '#ff0000',
+        fontSize: '22px',
+        color: '#ffffff',
         stroke: '#000000',
-        strokeThickness: 6,
-        fontStyle: 'bold',
-      },
-    ).setOrigin(0.5).setScrollFactor(0).setDepth(100);
+        strokeThickness: 4,
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(20001);
+    }
   }
 
   private hideEliminatedOverlay(): void {
@@ -577,9 +672,54 @@ export class GameScene extends Phaser.Scene {
       this.eliminatedText.destroy();
       this.eliminatedText = undefined;
     }
+    if (this.eliminatedSubtext) {
+      this.eliminatedSubtext.destroy();
+      this.eliminatedSubtext = undefined;
+    }
     if (this.eliminatedOverlay) {
       this.eliminatedOverlay.destroy();
       this.eliminatedOverlay = undefined;
+    }
+  }
+
+  private addKillFeedEntry(killerName: string, victimName: string, weapon: string): void {
+    const { width, height } = this.scale;
+    const weaponLabel = weapon === 'fireball' ? '🔥 Fireball' : '⚔️ Melee';
+    const msg = `${killerName}  ${weaponLabel}  ${victimName}`;
+
+    const text = this.add.text(width - 16, height - 16, msg, {
+      fontFamily: 'monospace',
+      fontSize: '14px',
+      color: '#ffffff',
+      stroke: '#000000',
+      strokeThickness: 3,
+      backgroundColor: '#000000',
+      padding: { x: 6, y: 4 },
+    }).setOrigin(1, 1).setScrollFactor(0).setDepth(15000);
+
+    // Push existing entries up
+    for (const entry of this.killFeedEntries) {
+      entry.y -= 28;
+    }
+    this.killFeedEntries.push(text);
+
+    // Fade out and remove after 5 seconds
+    this.tweens.add({
+      targets: text,
+      alpha: 0,
+      delay: 4000,
+      duration: 1000,
+      onComplete: () => {
+        const idx = this.killFeedEntries.indexOf(text);
+        if (idx !== -1) this.killFeedEntries.splice(idx, 1);
+        text.destroy();
+      },
+    });
+
+    // Cap at 5 visible entries
+    while (this.killFeedEntries.length > 5) {
+      const old = this.killFeedEntries.shift();
+      old?.destroy();
     }
   }
 
@@ -722,6 +862,20 @@ export class GameScene extends Phaser.Scene {
     // Pickup collision
     if (this.gamePhase === 'playing') {
       this.checkPickupCollisions();
+    }
+
+    // Kill Confirmed tag collection
+    if (this.gameMode === 'killConfirmed' && this.player?.alive && this.gamePhase === 'playing') {
+      for (const [tagId, sprite] of this.activeTags) {
+        if (this.pendingTagCollects.has(tagId)) continue;
+        const dx = this.player.sprite.x - sprite.x;
+        const dy = this.player.sprite.y - sprite.y;
+        if (Math.sqrt(dx * dx + dy * dy) < 24) {
+          this.pendingTagCollects.add(tagId);
+          sendTagCollect(tagId);
+          break;
+        }
+      }
     }
 
     // Always interpolate remote players (visible during countdown)
@@ -955,5 +1109,25 @@ export class GameScene extends Phaser.Scene {
         break;
       }
     }
+  }
+
+  private showFloatingDamage(worldX: number, worldY: number, damage: number, color: string): void {
+    const text = this.add.text(worldX, worldY - 10, `-${damage}`, {
+      fontFamily: 'monospace',
+      fontSize: '28px',
+      color,
+      fontStyle: 'bold',
+      stroke: '#000000',
+      strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(10000);
+
+    this.tweens.add({
+      targets: text,
+      y: worldY - 50,
+      alpha: 0,
+      duration: 2200,
+      ease: 'Power2',
+      onComplete: () => text.destroy(),
+    });
   }
 }
