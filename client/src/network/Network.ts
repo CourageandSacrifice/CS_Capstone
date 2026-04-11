@@ -137,9 +137,10 @@ export function sendStartGame(): void {
 }
 
 export async function getAvailableRooms(): Promise<any[]> {
-  const c = initClient();
-  const res = await c.http.get('/matchmake/my_room');
-  return res.data as any[];
+  const httpUrl = SERVER_URL.replace('wss://', 'https://').replace('ws://', 'http://');
+  const res = await fetch(`${httpUrl}/api/rooms`);
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
 }
 
 export async function joinRoomById(roomId: string, name: string, spriteKey = 'adventurer', clerkId = ''): Promise<Room> {

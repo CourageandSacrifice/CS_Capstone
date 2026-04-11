@@ -53,6 +53,7 @@ export class HUDScene extends Phaser.Scene {
   private confirmedLabel?: Phaser.GameObjects.Text;
   private confirmedText?: Phaser.GameObjects.Text;
   private tagIcon?: Phaser.GameObjects.Image;
+  private killFeedEntries: Phaser.GameObjects.Text[] = [];
 
   constructor() {
     super('HUDScene');
@@ -234,6 +235,9 @@ export class HUDScene extends Phaser.Scene {
     });
     this.gameScene.events.on('confirmedKillChanged', (confirmed: number) => {
       if (this.confirmedText) this.confirmedText.setText(`${confirmed}`);
+    });
+    this.gameScene.events.on('killFeedEntry', (killerName: string, victimName: string, weapon: string) => {
+      this.addKillFeedEntry(killerName, victimName, weapon);
     });
     this.gameScene.events.on('gameStarted', () => {
       this.switchToGameHUD();
@@ -568,20 +572,22 @@ export class HUDScene extends Phaser.Scene {
     this.mmContainer.setVisible(true);
 
     if (this.gameMode === 'killConfirmed') {
-      this.tagIcon = this.add.image(18, 74, 'kill-tag').setOrigin(0, 0).setDisplaySize(18, 18).setDepth(10);
-      this.confirmedLabel = this.add.text(40, 73, 'CONFIRMED', {
+      this.tagIcon = this.add.image(18, 90, 'kill-tag').setOrigin(0, 0).setDisplaySize(32, 32).setDepth(10);
+      this.confirmedLabel = this.add.text(46, 92, 'CONFIRMED', {
         fontFamily: 'Courier New, monospace',
-        fontSize: '9px',
-        color: '#888888',
+        fontSize: '11px',
+        color: '#ffd700',
         letterSpacing: 2,
+        stroke: '#000000',
+        strokeThickness: 2,
       }).setDepth(10);
-      this.confirmedText = this.add.text(18, 94, '0', {
+      this.confirmedText = this.add.text(18, 116, '0', {
         fontFamily: 'Courier New, monospace',
-        fontSize: '28px',
+        fontSize: '52px',
         color: '#ffd700',
         fontStyle: 'bold',
         stroke: '#000000',
-        strokeThickness: 5,
+        strokeThickness: 6,
       }).setDepth(10);
     }
 
@@ -879,5 +885,46 @@ export class HUDScene extends Phaser.Scene {
     const my = this.MINIMAP_Y + (y / worldH) * this.MINIMAP_H;
     this.minimapDots.fillStyle(0xff0000, 1);
     this.minimapDots.fillCircle(mx, my, 3);
+  }
+
+  private addKillFeedEntry(killerName: string, victimName: string, weapon: string): void {
+    const { width, height } = this.cameras.main;
+    const weaponLabel = weapon === 'fireball' ? 'Fireball' : 'Melee';
+    const msg = `${killerName}  [${weaponLabel}]  ${victimName}`;
+
+    const text = this.add.text(width - 16, height - 70, msg, {
+      fontFamily: 'monospace',
+      fontSize: '14px',
+      color: '#ffffff',
+      stroke: '#000000',
+      strokeThickness: 3,
+      backgroundColor: '#111111',
+      padding: { x: 6, y: 4 },
+    }).setOrigin(1, 1).setDepth(200);
+
+    // Push existing entries up
+    for (const entry of this.killFeedEntries) {
+      entry.y -= 28;
+    }
+    this.killFeedEntries.push(text);
+
+    // Fade out after 5 seconds
+    this.tweens.add({
+      targets: text,
+      alpha: 0,
+      delay: 4000,
+      duration: 1000,
+      onComplete: () => {
+        const idx = this.killFeedEntries.indexOf(text);
+        if (idx !== -1) this.killFeedEntries.splice(idx, 1);
+        text.destroy();
+      },
+    });
+
+    // Cap at 5 visible entries
+    while (this.killFeedEntries.length > 5) {
+      const old = this.killFeedEntries.shift();
+      old?.destroy();
+    }
   }
 }

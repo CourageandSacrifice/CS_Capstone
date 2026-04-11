@@ -5,6 +5,7 @@ import {
     playground,
     createRouter,
     createEndpoint,
+    matchMaker,
 } from "colyseus";
 
 /**
@@ -51,6 +52,17 @@ const server = defineServer({
 
         app.get("/hi", (req, res) => {
             res.send("It's time to kick ass and chew bubblegum!");
+        });
+
+        // Room listing for browse UI
+        app.get("/api/rooms", async (_req, res) => {
+            try {
+                const rooms = await matchMaker.query({ name: "my_room" });
+                res.json(rooms);
+            } catch (err) {
+                console.error("[api] /api/rooms error:", err);
+                res.json([]);
+            }
         });
 
         // ── Player stats API ──────────────────────────────────────────────
