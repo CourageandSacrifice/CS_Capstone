@@ -3,7 +3,6 @@ import { ClassData, CHARACTERS } from '../data/Classes';
 import type { GameScene } from './GameScene';
 import { joinRoom, reconnect, hasReconnectionToken, clearReconnectionData, leaveRoom, getRoom, sendStartGame } from '../network/Network';
 import { MAP_W, MAP_H, TILE_SIZE } from '../map/CampusMap';
-import { stopMusic } from '../lobby';
 
 export class HUDScene extends Phaser.Scene {
   private classData!: ClassData;
@@ -414,8 +413,7 @@ export class HUDScene extends Phaser.Scene {
     const cx = width / 2;
     const cy = height / 2;
 
-    stopMusic();
-    this.sound.play('sfx_countdown', { volume: 0.8 });
+    this.sound.play('sfx_countdown', { volume: 0.4 });
 
     const overlay = this.add.graphics().setDepth(150);
     overlay.fillStyle(0x000000, 0.45);
@@ -690,7 +688,7 @@ export class HUDScene extends Phaser.Scene {
       bg.strokeRoundedRect(0, 0, btnW, btnH, 4);
     });
     zone.on('pointerdown', () => {
-      this.sound.play('sfx_menu', { volume: 0.6 });
+      this.sound.play('sfx_menu', { volume: 0.4 });
       onClick();
     });
 

@@ -112,6 +112,14 @@ export class GameScene extends Phaser.Scene {
     this.load.audio('sfx_dead',      '/audio/dead.mp3');
     this.load.audio('sfx_countdown', '/audio/countdown.mp3');
     this.load.audio('sfx_menu',      '/audio/menu_hover.mp3');
+    this.load.audio('sfx_coin1',         '/audio/coin1.wav');
+    this.load.audio('sfx_coin2',         '/audio/coin2.wav');
+    this.load.audio('sfx_coin3',         '/audio/coin3.wav');
+    this.load.audio('sfx_fireball_hit1', '/audio/fireball_hit1.wav');
+    this.load.audio('sfx_fireball_hit2', '/audio/fireball_hit2.wav');
+    this.load.audio('sfx_fireball_hit3', '/audio/fireball_hit3.wav');
+    this.load.audio('sfx_pickup_fireball', '/audio/pickup_fireball.wav');
+    this.load.audio('sfx_pickup_health',   '/audio/pickup_health.wav');
   }
 
   init(data?: { classData?: ClassData }): void {
@@ -286,7 +294,7 @@ export class GameScene extends Phaser.Scene {
           this.events.emit('playerHpChanged', playerState.hp, playerState.maxHp);
           if (playerState.hp < prevHp) {
             this.player.takeDamage(0); // flash only, no additional HP reduction
-            this.sound.play('sfx_hit', { volume: 0.7 });
+            this.sound.play('sfx_hit', { volume: 0.4 });
           }
         });
 
@@ -312,7 +320,7 @@ export class GameScene extends Phaser.Scene {
           if (!playerState.alive) {
             this.player.playDeath();
             // showEliminatedOverlay is called from 'killed' handler with killer name
-            this.sound.play('sfx_dead', { volume: 0.8 });
+            this.sound.play('sfx_dead', { volume: 0.4 });
           } else {
             this.player.playRespawn();
             this.hideEliminatedOverlay();
@@ -467,6 +475,10 @@ export class GameScene extends Phaser.Scene {
 
     room.onMessage('damageDealt', (data: { x: number; y: number; damage: number; type: string }) => {
       const color = data.type === 'fireball' ? '#ffd700' : '#ffffff';
+      if (data.type === 'fireball') {
+        const sfx = ['sfx_fireball_hit1', 'sfx_fireball_hit2', 'sfx_fireball_hit3'][Math.floor(Math.random() * 3)];
+        this.sound.play(sfx, { volume: 0.4 });
+      }
       this.showFloatingDamage(data.x, data.y, data.damage, color);
     });
 
@@ -482,9 +494,11 @@ export class GameScene extends Phaser.Scene {
         if (data.type === 'fireball') {
           this.fireballCount = Math.min(this.fireballCount + 1, this.MAX_FIREBALLS);
           this.events.emit('inventoryChanged', this.fireballCount);
+          this.sound.play('sfx_pickup_fireball', { volume: 0.4 });
         } else {
           this.player.hp = Math.min(this.player.hp + 20, this.player.maxHp);
           this.events.emit('playerHpChanged', this.player.hp, this.player.maxHp);
+          this.sound.play('sfx_pickup_health', { volume: 0.4 });
         }
       }
     });
@@ -532,6 +546,8 @@ export class GameScene extends Phaser.Scene {
     });
 
     room.onMessage('tagCollected', (data: { tagId: number; collectorId: string; collectorName: string }) => {
+      const coinSfx = ['sfx_coin1', 'sfx_coin2', 'sfx_coin3'][Math.floor(Math.random() * 3)];
+      this.sound.play(coinSfx, { volume: 0.4 });
       const sprite = this.activeTags.get(data.tagId);
       if (sprite) {
         const text = this.add.text(sprite.x, sprite.y - 10, '+1', {

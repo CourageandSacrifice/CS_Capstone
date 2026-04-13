@@ -6,13 +6,58 @@ const delay = (ms: number): Promise<void> => new Promise(r => setTimeout(r, ms))
 
 function playMenuClick(): void {
   const audio = new Audio('/audio/menu_hover.mp3');
-  audio.volume = 0.6;
+  audio.volume = 0.4;
   audio.play().catch(() => {});
 }
 
-const bgMusic = new Audio('/audio/music.mp3');
-bgMusic.loop = true;
-bgMusic.volume = 0.4;
+// ── Chiptune music playlist (shuffled, loops forever) ──
+const CHIPTUNE_TRACKS = [
+  '/audio/chiptune/Three Red Hearts Box Jump.ogg',
+  '/audio/chiptune/Three Red Hearts Candy.ogg',
+  '/audio/chiptune/Three Red Hearts Connected.ogg',
+  '/audio/chiptune/Three Red Hearts Deep Blue.ogg',
+  '/audio/chiptune/Three Red Hearts Go (No Vocal).ogg',
+  '/audio/chiptune/Three Red Hearts Modern Bits.ogg',
+  '/audio/chiptune/Three Red Hearts Out of Time.ogg',
+  '/audio/chiptune/Three Red Hearts Penguin Town.ogg',
+  '/audio/chiptune/Three Red Hearts Penguins vs Rabbits.ogg',
+  '/audio/chiptune/Three Red Hearts Penultimate.ogg',
+  '/audio/chiptune/Three Red Hearts Pixel War 1.ogg',
+  '/audio/chiptune/Three Red Hearts Pixel War 2.ogg',
+  '/audio/chiptune/Three Red Hearts Princess Quest.ogg',
+  '/audio/chiptune/Three Red Hearts Puzzle Pieces.ogg',
+  '/audio/chiptune/Three Red Hearts Rabbit Town.ogg',
+  '/audio/chiptune/Three Red Hearts Rumble at the Gates.ogg',
+  '/audio/chiptune/Three Red Hearts Sanctuary.ogg',
+  '/audio/chiptune/Three Red Hearts Save the City.ogg',
+  '/audio/chiptune/Three Red Hearts Three Red Hearts.ogg',
+];
+
+function shuffleArray<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+let playlist: string[] = shuffleArray(CHIPTUNE_TRACKS);
+let trackIndex = 0;
+const bgMusic = new Audio(playlist[0]);
+bgMusic.volume = 0.3;
+
+function playNextTrack(): void {
+  trackIndex++;
+  if (trackIndex >= playlist.length) {
+    playlist = shuffleArray(CHIPTUNE_TRACKS);
+    trackIndex = 0;
+  }
+  bgMusic.src = playlist[trackIndex];
+  bgMusic.play().catch(() => {});
+}
+
+bgMusic.addEventListener('ended', playNextTrack);
 
 function startMusic(): void {
   if (!bgMusic.paused) return;
