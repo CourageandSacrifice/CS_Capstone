@@ -67,7 +67,7 @@ const FIREBALL_RANGE  = 600; // generous buffer for network latency — client v
 
 const TAG_EXPIRE_TIME = 15000;  // 15 seconds
 const KC_SCORE_LIMIT = 20;
-const TAG_COLLECT_RANGE = 24;
+const TAG_COLLECT_RANGE = 64;
 
 const PLAYER_COLORS = [0x3498db, 0xe74c3c, 0x2ecc71, 0xf39c12];
 
