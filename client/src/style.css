@@ -610,6 +610,22 @@ html, body {
   font-size: 9px; color: #444456; letter-spacing: 2px;
   padding-top: 40px;
 }
+.leaderboard-table {
+  width: 100%; border-collapse: collapse; font-size: 11px; letter-spacing: 1px;
+}
+.leaderboard-table th {
+  color: #c41230; padding: 8px 12px; text-align: left;
+  border-bottom: 2px solid #c41230; letter-spacing: 2px;
+}
+.leaderboard-table td {
+  padding: 8px 12px; border-bottom: 1px solid #222238; color: #ccd;
+}
+.leaderboard-table .leaderboard-top td {
+  color: #fff;
+}
+.leaderboard-table tr:hover td {
+  background: #1a1a2e;
+}
 
 .locker-grid {
   display: grid;

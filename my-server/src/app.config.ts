@@ -106,6 +106,27 @@ const server = defineServer({
             }
         });
 
+        // Global leaderboard — top 20 players by total kills
+        app.get("/api/leaderboard", async (_req: any, res: any) => {
+            try {
+                const rows = await prisma.playerStats.findMany({
+                    take: 20,
+                    orderBy: { totalKills: 'desc' },
+                    include: { user: { select: { username: true } } },
+                });
+                res.json(rows.map((r: any) => ({
+                    username:     r.user.username,
+                    total_kills:  r.totalKills,
+                    total_deaths: r.totalDeaths,
+                    total_wins:   r.totalWins,
+                    total_games:  r.totalGames,
+                })));
+            } catch (err) {
+                console.error("[api] /api/leaderboard error:", err);
+                res.status(500).json({ error: "Internal server error" });
+            }
+        });
+
         /**
          * Use @colyseus/monitor
          * It is recommended to protect this route with a password
