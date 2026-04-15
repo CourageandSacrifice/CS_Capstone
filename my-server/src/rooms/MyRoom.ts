@@ -94,6 +94,7 @@ export class MyRoom extends Room {
   // Maps sessionId → clerkId (not synced to clients, server-only)
   private playerClerkIds = new Map<string, string>();
   private gameMode = 'ffa';
+  private gameEndTriggered = false;
   private tagCounter = 0;
   private activeTags = new Map<number, { id: number; x: number; y: number; killerId: string; victimId: string; timer: any }>();
 
@@ -360,6 +361,7 @@ export class MyRoom extends Room {
     startGame: (client: Client) => {
       if (client.sessionId !== this.hostId) return;
       if (this.state.phase !== "waiting") return;
+      this.gameEndTriggered = false;
       this.state.pickupSeed = (Math.random() * 0xFFFFFF | 0) + 1;
       this.state.phase = "playing";
       this.lock(); // block new joins
@@ -400,6 +402,8 @@ export class MyRoom extends Room {
   }
 
   private async triggerEndGame(timeLimitReached = false): Promise<void> {
+    if (this.gameEndTriggered) return;
+    this.gameEndTriggered = true;
     if (this.tickInterval) { this.tickInterval.clear(); this.tickInterval = undefined; }
     this.state.timeLimitReached = timeLimitReached;
     this.state.gameOver = true;
