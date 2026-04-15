@@ -534,7 +534,7 @@ html, body {
 /* ═══════════════════════════════════════
    STATS PANEL
 ═══════════════════════════════════════ */
-#stats-panel {
+#stats-panel, #leaderboard-panel {
   flex: 1; overflow-y: auto;
   padding: 32px 48px;
   background: rgba(10, 10, 10, 0.82);
