@@ -1,6 +1,6 @@
 import { CHARACTERS, ClassData } from './data/Classes';
 import { createRoom, joinAnyRoom, joinRoom } from './network/Network';
-import { requireAuth, saveUserToSupabase, getClerk, fetchPlayerStats, PlayerStats } from './auth';
+import { requireAuth, saveUserToSupabase, getClerk, fetchPlayerStats, fetchLeaderboard, PlayerStats, LeaderboardEntry } from './auth';
 
 const delay = (ms: number): Promise<void> => new Promise(r => setTimeout(r, ms));
 
@@ -334,13 +334,16 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void, clerkId:
   const navLobby = document.getElementById('nav-lobby')!;
   const navLocker = document.getElementById('nav-locker')!;
   const navStats = document.getElementById('nav-stats')!;
+  const navLeaderboard = document.getElementById('nav-leaderboard')!;
   const lobbyStage = document.getElementById('lobby-stage')!;
   const lockerPanel = document.getElementById('locker-panel')!;
   const statsPanel = document.getElementById('stats-panel')!;
+  const leaderboardPanel = document.getElementById('leaderboard-panel')!;
   let lockerBuilt = false;
+  let leaderboardBuilt = false;
 
-  const allTabs = [navLobby, navLocker, navStats];
-  const allPanels = [lobbyStage, lockerPanel, statsPanel];
+  const allTabs = [navLobby, navLocker, navStats, navLeaderboard];
+  const allPanels = [lobbyStage, lockerPanel, statsPanel, leaderboardPanel];
 
   const switchTab = (activeTab: HTMLElement, activePanel: HTMLElement) => {
     allTabs.forEach(t => t.classList.remove('active'));
@@ -371,6 +374,15 @@ function showLobby(username: string, resolve: (r: LobbyResult) => void, clerkId:
   navStats.addEventListener('click', () => {
     playMenuClick();
     switchTab(navStats, statsPanel);
+  });
+
+  navLeaderboard.addEventListener('click', () => {
+    playMenuClick();
+    switchTab(navLeaderboard, leaderboardPanel);
+    if (!leaderboardBuilt) {
+      leaderboardBuilt = true;
+      void fetchLeaderboard().then(renderLeaderboardPanel);
+    }
   });
 
   let mode: 'host' | 'join' = 'host';
@@ -748,5 +760,51 @@ function renderStatsPanel(stats: PlayerStats | null, username: string, avatarUrl
         <div class="stats-card-lbl">WIN RATE</div>
       </div>
     </div>
+  `;
+}
+
+function renderLeaderboardPanel(entries: LeaderboardEntry[]): void {
+  const container = document.getElementById('leaderboard-content');
+  if (!container) return;
+
+  if (!entries.length) {
+    container.className = 'stats-empty';
+    container.innerHTML =
+      `<div class="stats-empty-icon">🏆</div>` +
+      `<p class="stats-empty-msg">No data yet.</p>` +
+      `<p class="stats-empty-sub">Play a game to get on the board!</p>`;
+    return;
+  }
+
+  container.className = '';
+  container.innerHTML = `
+    <table class="leaderboard-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>PLAYER</th>
+          <th>KILLS</th>
+          <th>DEATHS</th>
+          <th>K/D</th>
+          <th>WINS</th>
+          <th>GAMES</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${entries.map((e, i) => {
+          const kd = (e.total_kills / Math.max(e.total_deaths, 1)).toFixed(2);
+          const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`;
+          return `<tr class="${i < 3 ? 'leaderboard-top' : ''}">
+            <td>${medal}</td>
+            <td>${e.username}</td>
+            <td>${e.total_kills}</td>
+            <td>${e.total_deaths}</td>
+            <td>${kd}</td>
+            <td>${e.total_wins}</td>
+            <td>${e.total_games}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
   `;
 }
