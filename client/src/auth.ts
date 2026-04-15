@@ -19,7 +19,117 @@ export async function loadClerk(): Promise<any> {
   if (clerkInstance) return clerkInstance;
   if (!PUBLISHABLE_KEY) throw new Error('VITE_CLERK_PUBLISHABLE_KEY is not set');
   clerkInstance = new ClerkCtor(PUBLISHABLE_KEY);
-  await clerkInstance.load();
+  await clerkInstance.load({
+    appearance: {
+      variables: {
+        colorPrimary: '#c41230',
+        colorBackground: '#0a0a0a',
+        colorInputBackground: '#111111',
+        colorInputText: '#ffffff',
+        colorText: '#ffffff',
+        colorTextSecondary: '#888888',
+        colorDanger: '#ff4444',
+        borderRadius: '0px',
+        fontFamily: "'Press Start 2P', 'Courier New', monospace",
+        fontSize: '11px',
+      },
+      elements: {
+        card: {
+          backgroundColor: '#0a0a0a',
+          border: '3px solid #c41230',
+          boxShadow: '6px 6px 0 #000',
+          borderRadius: '0',
+        },
+        headerTitle: {
+          color: '#c41230',
+          fontFamily: "'Press Start 2P', monospace",
+          textTransform: 'uppercase',
+          letterSpacing: '2px',
+        },
+        headerSubtitle: {
+          color: '#666676',
+          fontFamily: "'Press Start 2P', monospace",
+          fontSize: '8px',
+        },
+        formButtonPrimary: {
+          backgroundColor: '#c41230',
+          border: '2px solid #8a0a20',
+          borderRadius: '0',
+          fontFamily: "'Press Start 2P', monospace",
+          fontSize: '10px',
+          letterSpacing: '1px',
+          textTransform: 'uppercase',
+          boxShadow: '3px 3px 0 #000',
+        },
+        formButtonPrimary__hover: {
+          backgroundColor: '#a00f28',
+        },
+        formFieldInput: {
+          backgroundColor: '#111111',
+          border: '2px solid #2a2a2a',
+          borderRadius: '0',
+          color: '#ffffff',
+          fontFamily: "'Press Start 2P', monospace",
+          fontSize: '10px',
+        },
+        formFieldInput__focused: {
+          borderColor: '#c41230',
+          boxShadow: '0 0 0 1px #c41230',
+        },
+        formFieldLabel: {
+          color: '#888888',
+          fontFamily: "'Press Start 2P', monospace",
+          fontSize: '8px',
+          letterSpacing: '1px',
+          textTransform: 'uppercase',
+        },
+        footerActionLink: {
+          color: '#c41230',
+          fontFamily: "'Press Start 2P', monospace",
+          fontSize: '8px',
+        },
+        footerActionText: {
+          color: '#666676',
+          fontFamily: "'Press Start 2P', monospace",
+          fontSize: '8px',
+        },
+        socialButtonsBlockButton: {
+          backgroundColor: '#111111',
+          border: '2px solid #2a2a2a',
+          borderRadius: '0',
+          color: '#ffffff',
+          fontFamily: "'Press Start 2P', monospace",
+          fontSize: '9px',
+        },
+        socialButtonsBlockButton__hover: {
+          backgroundColor: '#1a1a1a',
+          borderColor: '#c41230',
+        },
+        dividerLine: {
+          backgroundColor: '#2a2a2a',
+        },
+        dividerText: {
+          color: '#666676',
+          fontFamily: "'Press Start 2P', monospace",
+          fontSize: '8px',
+        },
+        identityPreview: {
+          backgroundColor: '#111111',
+          border: '2px solid #2a2a2a',
+          borderRadius: '0',
+        },
+        identityPreviewText: {
+          color: '#ffffff',
+          fontFamily: "'Press Start 2P', monospace",
+        },
+        userButtonPopoverCard: {
+          backgroundColor: '#0a0a0a',
+          border: '2px solid #c41230',
+          borderRadius: '0',
+        },
+      },
+    },
+  });
   return clerkInstance;
 }
 
@@ -89,7 +199,8 @@ export async function fetchPlayerStats(clerkId: string): Promise<PlayerStats | n
     const res = await fetch(`${SERVER_HTTP}/api/stats/${encodeURIComponent(clerkId)}`);
     if (!res.ok) return null;
     return await res.json() as PlayerStats | null;
-  } catch {
+  } catch (err) {
+    console.error('[stats] fetch failed:', err);
     return null;
   }
 }
@@ -107,7 +218,8 @@ export async function fetchLeaderboard(): Promise<LeaderboardEntry[]> {
     const res = await fetch(`${SERVER_HTTP}/api/leaderboard`);
     if (!res.ok) return [];
     return await res.json() as LeaderboardEntry[];
-  } catch {
+  } catch (err) {
+    console.error('[leaderboard] fetch failed:', err);
     return [];
   }
 }
