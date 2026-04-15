@@ -93,3 +93,21 @@ export async function fetchPlayerStats(clerkId: string): Promise<PlayerStats | n
     return null;
   }
 }
+
+export interface LeaderboardEntry {
+  username: string;
+  total_kills: number;
+  total_deaths: number;
+  total_wins: number;
+  total_games: number;
+}
+
+export async function fetchLeaderboard(): Promise<LeaderboardEntry[]> {
+  try {
+    const res = await fetch(`${SERVER_HTTP}/api/leaderboard`);
+    if (!res.ok) return [];
+    return await res.json() as LeaderboardEntry[];
+  } catch {
+    return [];
+  }
+}
